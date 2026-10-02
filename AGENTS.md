@@ -30,3 +30,10 @@ Static HTML/JS wargame. No Node, no bundler. Serve with `python -m http.server 8
 | `data/map.json` | Generated grid and towns |
 
 If you change coasts or towns, regenerate with `python tools/gen_map.py` and check the ASCII print before committing.
+
+## Cursor Cloud specific instructions
+
+- Python 3 on the base image is enough. There is no package install. `data/map.json` is already committed.
+- On boot, the environment start command serves this repo with `python3 -m http.server 8080` and exits once port 8080 answers. If it is not running, start that command from the repo root.
+- Open `http://localhost:8080`. Modules do not load from `file://`.
+- Verify in the browser: title screen, Cross the Channel, hold a Norman unit, plot an order, Execute week, and confirm the HUD date moves past 18 September 1066.
