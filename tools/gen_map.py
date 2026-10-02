@@ -1,8 +1,9 @@
 """Generate a square-grid operational map of Britain and Normandy, 1066.
 
-England and Wales stay on y <= 45 and Normandy/Ponthieu on y >= 49. The open
-rows between them are the Channel. src/world.js treats y <= 46 as England once
-a Norman army is ashore, so France must not cross that line.
+The land mask is a hand-drawn coastline, not a smoothed blob. England and
+Wales stay on y <= 44. Rows 45 and 46 are the open Channel. Normandy and
+Ponthieu start at y >= 47, south of the latitude src/world.js treats as
+England (y <= 46).
 
 Ermine Street is the straight north road London–Lincoln–York. In fair weather
 a housecarl spends four ticks on a road cell and five on a town, with 32 ticks
@@ -31,95 +32,105 @@ CH = {
 LANDISH = {CLEAR, FOREST, HILL, MARSH, BEACH, RIVER, ROAD, TOWN}
 WALKABLE = {CLEAR, FOREST, HILL, MARSH, BEACH, RIVER, ROAD}
 
-# Inclusive west-east spans. Inlets (Humber, Wash, Thames, Bristol Channel,
-# Cardigan Bay, Solway, Morecambe) are indents in the shore, not round holes.
+# Inclusive west-east spans. Inlets are bites in the shore, not round holes.
+# Spine of the island is x=22: York (y=18), Lincoln (y=24), London (y=32).
 LAND = {
-    # Northern England, tapering toward the Cheviots.
-    2: [(22, 26)],
-    3: [(21, 27)],
-    4: [(20, 28)],
-    5: [(19, 29)],
-    6: [(18, 30)],
-    7: [(17, 31)],
-    8: [(16, 32)],
-    9: [(15, 32)],
-    10: [(14, 33)],
-    11: [(16, 33)],  # Solway Firth
-    12: [(13, 33)],  # Cumbria
-    13: [(11, 34)],
-    14: [(11, 34)],
-    15: [(10, 34)],
-    16: [(10, 34)],
-    17: [(12, 33)],  # Morecambe Bay
-    18: [(10, 33)],
-    19: [(9, 33)],
-    20: [(8, 33)],
-    21: [(7, 33)],
-    22: [(7, 34)],
-    23: [(7, 34)],  # York
-    24: [(6, 33)],
-    25: [(6, 28)],  # Humber, north shore
-    26: [(6, 27)],
-    27: [(5, 31)],  # Lincolnshire begins
-    28: [(5, 35)],
-    29: [(5, 35)],  # Lincoln, on Ermine Street
-    30: [(6, 33)],
-    31: [(8, 31)],  # The Wash; Cardigan Bay on the west
-    32: [(9, 29)],
-    33: [(6, 35)],  # Norfolk shore; Pembrokeshire
-    34: [(5, 39)],
-    35: [(5, 40)],  # East Anglia
-    36: [(6, 39)],
-    37: [(8, 37)],  # Bristol Channel opening; Essex
-    38: [(13, 28)],  # London, Thames mouth, channel still open
-    39: [(15, 35)],  # head of the channel; north Kent
-    40: [(7, 39)],  # Devon returns west; Dover's cliffs
-    41: [(5, 39)],
-    42: [(4, 36)],
-    43: [(4, 34)],  # Sussex beaches: Chichester, Pevensey, Hastings
-    44: [(5, 14)],  # Cornwall
-    45: [(6, 10), (19, 22)],  # Lizard, and the Isle of Wight across the Solent
-    # 46-48 Channel
-    # Normandy and Ponthieu. St-Valery's headland is the shore closest to Sussex.
-    49: [(31, 38)],
-    50: [(13, 18), (21, 27), (31, 39)],  # Cotentin, Dives, Seine mouth, Ponthieu
-    51: [(11, 40)],
-    52: [(10, 41)],
-    53: [(10, 41)],
-    54: [(9, 41)],
-    55: [(9, 42)],
-    56: [(10, 41)],
-    57: [(11, 40)],
-    58: [(12, 39)],
-    59: [(14, 37)],
-    60: [(16, 35)],
-    61: [(18, 33)],
+    # Northern England, widening south from the Cheviots.
+    2: [(21, 26)],
+    3: [(19, 29)],
+    4: [(18, 31)],
+    5: [(17, 32)],
+    6: [(16, 33)],
+    7: [(15, 33)],
+    8: [(14, 34)],
+    # Solway Firth, then the Cumbrian bulge and Morecambe Bay.
+    9: [(17, 34)],
+    10: [(16, 34)],
+    11: [(11, 34)],
+    12: [(9, 34)],
+    13: [(12, 33)],
+    14: [(8, 33)],
+    # Wales juts west. The Humber is a funnel on the east of York.
+    15: [(4, 33)],
+    16: [(2, 33)],
+    17: [(2, 33)],
+    18: [(2, 26)],
+    19: [(2, 24)],
+    20: [(3, 32)],
+    21: [(3, 35)],
+    # Cardigan Bay bites deep. The Wash is a square gulf. Lincoln is x=22.
+    22: [(8, 36)],
+    23: [(10, 34)],
+    24: [(8, 27)],
+    25: [(6, 26)],
+    26: [(4, 26)],
+    # Pembrokeshire hooks west. Norfolk jumps out to close the Wash.
+    27: [(2, 37)],
+    28: [(2, 40)],
+    29: [(2, 42)],  # East Anglia
+    30: [(2, 41)],
+    31: [(3, 36)],
+    # Thames estuary, east of London.
+    32: [(2, 27)],
+    33: [(2, 26)],
+    # Bristol Channel: South Wales, open water, then the Somerset bridge.
+    34: [(2, 11), (19, 28)],
+    35: [(2, 9), (21, 34)],
+    36: [(3, 7), (23, 41)],  # Wales tip, and Dover's cliff at the east end
+    # The channel mouth opens west. Devon is the south shore.
+    37: [(10, 39)],
+    38: [(6, 36)],
+    39: [(4, 34)],
+    # Lyme Bay opens south between Devon and Hampshire.
+    40: [(3, 12), (20, 34)],
+    # Sussex shore. Sea is immediately south of the eastern span, so a fleet
+    # that embarks at St-Valery can reach this beach in the same fair week.
+    41: [(3, 11), (20, 33)],
+    # Cornwall keeps going. The Solent, south of Sussex, is open water.
+    42: [(4, 9)],
+    # Isle of Wight, with sea on every side.
+    43: [(5, 8), (24, 26)],
+    44: [(6, 7), (25, 25)],
+    # 45-46 open Channel.
+    # Cotentin to the west, St-Valery's headland to the east, Seine bay between.
+    47: [(13, 16), (31, 35)],
+    48: [(12, 18), (30, 38)],
+    49: [(11, 20), (30, 39)],
+    50: [(10, 25), (29, 40)],
+    51: [(9, 41)],
+    52: [(8, 41)],
+    53: [(9, 40)],
+    54: [(10, 39)],
+    55: [(11, 38)],
+    56: [(13, 36)],
+    57: [(15, 34)],
+    58: [(17, 32)],
 }
 
 TOWNS = [
-    ("York", 25, 23, 15, "english"),
-    ("Durham", 20, 14, 4, "english"),
-    ("Lincoln", 25, 29, 6, "english"),
-    ("Nottingham", 19, 27, 5, "english"),
-    ("Norwich", 37, 35, 5, "english"),
-    ("Stamford", 28, 31, 4, "english"),
-    ("Oxford", 19, 35, 5, "english"),
-    ("London", 25, 38, 25, "english"),
-    ("Winchester", 18, 40, 15, "english"),
-    ("Canterbury", 33, 40, 8, "english"),
-    ("Dover", 39, 41, 8, "english"),
-    ("Hastings", 33, 43, 6, "english"),
-    ("Pevensey", 29, 43, 6, "english"),
-    ("Chichester", 22, 43, 4, "english"),
-    ("Exeter", 11, 41, 5, "english"),
-    ("Gloucester", 16, 37, 5, "english"),
-    ("Wallingford", 22, 36, 4, "english"),
-    ("Thetford", 32, 34, 3, "english"),
-    ("St-Valery", 33, 49, 4, "norman"),
-    ("Bayeux", 16, 54, 3, "norman"),
-    ("Caen", 21, 56, 6, "norman"),
-    ("Rouen", 30, 57, 8, "norman"),
-    ("Dives", 24, 51, 3, "norman"),
+    ("York", 22, 18, 15, "english"),
+    ("Durham", 18, 8, 4, "english"),
+    ("Lincoln", 22, 24, 6, "english"),
+    ("Nottingham", 16, 22, 5, "english"),
+    ("Norwich", 39, 29, 5, "english"),
+    ("Stamford", 26, 28, 4, "english"),
+    ("Oxford", 16, 32, 5, "english"),
+    ("London", 22, 32, 25, "english"),
+    ("Winchester", 21, 38, 15, "english"),
+    ("Canterbury", 33, 37, 8, "english"),
+    ("Dover", 41, 36, 8, "english"),
+    ("Hastings", 31, 41, 6, "english"),
+    ("Pevensey", 26, 41, 6, "english"),
+    ("Chichester", 22, 41, 4, "english"),
+    ("Exeter", 9, 38, 5, "english"),
+    ("Gloucester", 20, 34, 5, "english"),
+    ("Wallingford", 19, 33, 4, "english"),
+    ("Thetford", 33, 30, 3, "english"),
+    ("St-Valery", 31, 47, 4, "norman"),
+    ("Bayeux", 15, 50, 3, "norman"),
+    ("Caen", 22, 53, 6, "norman"),
+    ("Rouen", 34, 55, 8, "norman"),
+    ("Dives", 23, 50, 3, "norman"),
 ]
 
 # Must be ports, and must actually touch water (the flag is not a fiction).
@@ -133,6 +144,10 @@ REQUIRED_PORTS = {
     "Dives",
     "Rouen",
 }
+
+# Ermine Street. Quay-building must not cut this column.
+SPINE_X = 22
+SPINE_Y0, SPINE_Y1 = 18, 32
 
 
 def stamp(grid, cx, cy, rx, ry, terr):
@@ -185,11 +200,14 @@ def apply_beaches(grid):
             sea_n = y > 0 and grid[y - 1][x] == SEA
             sea_s = y + 1 < H and grid[y + 1][x] == SEA
             sea_e = x + 1 < W and grid[y][x + 1] == SEA
-            # South coast of England, including the Kent corner at Dover.
-            if y <= 45 and y >= 40 and (sea_s or (sea_e and x >= 36)):
+            # South coast: Sussex, the Solent shore, Cornwall, and Wight's south edge.
+            if 39 <= y <= 44 and sea_s:
+                grid[y][x] = BEACH
+            # Dover's cliff, where Kent meets the sea on the east and the south.
+            elif 35 <= y <= 38 and x >= 36 and (sea_s or sea_e):
                 grid[y][x] = BEACH
             # Norman and Ponthieu shore facing the Channel.
-            elif y >= 49 and sea_n:
+            elif y >= 47 and sea_n:
                 grid[y][x] = BEACH
 
 
@@ -207,30 +225,45 @@ def town_xy(towns, name):
     return t["x"], t["y"]
 
 
+def paint_road(grid, coords):
+    """Paint a road, and refuse a route that steps into the sea."""
+    for i in range(len(coords) - 1):
+        segment = rook_line(*coords[i], *coords[i + 1])
+        for x, y in segment:
+            cell = grid[y][x]
+            if cell == SEA:
+                raise SystemExit(
+                    f"road crosses sea at {x},{y} between {coords[i]} and {coords[i + 1]}"
+                )
+            if cell in WALKABLE:
+                grid[y][x] = ROAD
+
+
 def build():
     grid = [[SEA for _ in range(W)] for _ in range(H)]
     fill_land(grid)
 
-    # Uplands and woods. Roads are painted later and bridge these.
-    stamp(grid, 22, 6, 3, 3, HILL)  # Cheviots
-    stamp(grid, 16, 16, 3, 8, HILL)  # Pennines, west of the Vale of York
-    stamp(grid, 10, 27, 4, 7, HILL)  # Welsh massif
-    stamp(grid, 16, 34, 3, 2, HILL)  # Cotswolds
-    stamp(grid, 10, 42, 3, 2, HILL)  # Dartmoor
-    stamp(grid, 30, 41, 7, 1, HILL)  # North and South Downs
-    stamp(grid, 18, 55, 6, 3, HILL)  # Norman bocage
+    # Uplands and woods sit inland. Roads are painted later and bridge them.
+    # None of these ellipses are the coastline.
+    stamp(grid, 22, 5, 3, 2, HILL)  # Cheviots
+    stamp(grid, 14, 15, 3, 6, HILL)  # Pennines, west of the Vale of York
+    stamp(grid, 7, 29, 4, 6, HILL)  # Welsh massif
+    stamp(grid, 16, 37, 2, 2, HILL)  # Cotswolds
+    stamp(grid, 10, 39, 2, 1, HILL)  # Dartmoor
+    stamp(grid, 28, 39, 5, 1, HILL)  # North and South Downs
+    stamp(grid, 22, 55, 5, 2, HILL)  # Norman bocage
 
-    stamp(grid, 30, 41, 4, 2, FOREST)  # the Weald, inland of the Sussex shore
-    stamp(grid, 15, 42, 2, 1, FOREST)  # New Forest
-    stamp(grid, 21, 26, 2, 2, FOREST)  # Sherwood
-    stamp(grid, 12, 24, 2, 3, FOREST)  # Welsh woods
-    stamp(grid, 34, 34, 2, 2, FOREST)  # East Anglia
-    stamp(grid, 24, 56, 4, 2, FOREST)  # Norman woods
+    stamp(grid, 27, 38, 3, 1, FOREST)  # the Weald
+    stamp(grid, 12, 39, 2, 1, FOREST)  # New Forest
+    stamp(grid, 18, 23, 2, 2, FOREST)  # Sherwood, west of Ermine Street
+    stamp(grid, 6, 31, 2, 2, FOREST)  # Welsh woods
+    stamp(grid, 36, 29, 2, 2, FOREST)  # East Anglia
+    stamp(grid, 26, 54, 3, 2, FOREST)  # Norman woods
 
-    stamp(grid, 30, 31, 3, 2, MARSH)  # the Fens, east of Ermine Street
-    stamp(grid, 18, 38, 2, 1, MARSH)  # Somerset levels
-    stamp(grid, 35, 42, 2, 1, MARSH)  # Romney Marsh
-    stamp(grid, 29, 27, 2, 1, MARSH)  # Humber levels
+    stamp(grid, 28, 27, 2, 1, MARSH)  # the Fens, east of Ermine Street
+    stamp(grid, 12, 38, 2, 1, MARSH)  # Somerset levels
+    stamp(grid, 32, 39, 2, 1, MARSH)  # Romney Marsh
+    stamp(grid, 25, 20, 1, 1, MARSH)  # Humber levels
 
     apply_beaches(grid)
 
@@ -243,50 +276,53 @@ def build():
             {"name": name, "x": x, "y": y, "value": value, "owner": owner, "port": False}
         )
 
-    thames_mouth = (30, 38)
-    humber_mouth = (29, 26)
-    severn_mouth = (14, 39)
-    seine_mouth = (29, 50)
+    # Rivers reach the sea. They stay off the x=22 march except at the town cells.
     paint_line(
         grid,
-        [town_xy(towns, "Gloucester"), town_xy(towns, "Oxford"), town_xy(towns, "Wallingford"), town_xy(towns, "London"), thames_mouth],
+        [
+            town_xy(towns, "Gloucester"),
+            (20, 33),
+            town_xy(towns, "Oxford"),
+            town_xy(towns, "Wallingford"),
+            town_xy(towns, "London"),
+            (27, 32),
+        ],
         RIVER,
         WALKABLE,
     )
-    paint_line(grid, [town_xy(towns, "York"), humber_mouth], RIVER, WALKABLE)
+    paint_line(grid, [town_xy(towns, "York"), (26, 18)], RIVER, WALKABLE)
     paint_line(
         grid,
-        [(9, 30), town_xy(towns, "Gloucester"), severn_mouth],
+        [(10, 30), (20, 31), town_xy(towns, "Gloucester"), (18, 34)],
         RIVER,
         WALKABLE,
     )
-    # East of Rouen, so the road north to Ponthieu does not pave over the whole Seine.
-    paint_line(grid, [(31, 57), (31, 51), seine_mouth], RIVER, WALKABLE)
-    paint_line(grid, [town_xy(towns, "St-Valery"), (33, 53)], RIVER, WALKABLE)  # Somme
+    # East of Rouen, so the road north to Ponthieu does not pave the whole Seine.
+    paint_line(grid, [(35, 55), (37, 55), (37, 48)], RIVER, WALKABLE)
+    paint_line(grid, [(32, 47), (32, 50)], RIVER, WALKABLE)  # Somme
 
     roads = [
         ["London", "Lincoln", "York"],  # Ermine Street
         ["York", "Durham"],
-        ["Dover", "Canterbury", (28, 39), "London"],  # stays on land west of the Thames mouth
+        ["Dover", (39, 36), (36, 37), "Canterbury", (28, 36), (24, 34), "London"],
         ["London", "Wallingford", "Oxford"],
-        ["Oxford", "Gloucester"],
-        ["Exeter", "Winchester", "London"],
-        ["Chichester", "Pevensey", "Hastings", (36, 41), "Dover"],
-        ["Winchester", "Chichester"],
-        ["London", (28, 36), "Thetford", "Norwich"],
+        ["Oxford", (19, 33), "Gloucester"],
+        ["Exeter", "Winchester", (24, 37), (24, 34), "London"],
+        ["Chichester", "Pevensey", "Hastings", (33, 40), (34, 38), (36, 37), (39, 36), "Dover"],
+        ["Winchester", (20, 39), (22, 40), "Chichester"],
+        ["London", (24, 31), (30, 30), "Thetford", "Norwich"],
         ["Nottingham", "Lincoln"],
         ["Caen", "Bayeux"],
         ["Dives", "Caen"],
         ["Caen", "Rouen"],
-        ["Rouen", (33, 52), "St-Valery"],
-        ["Dives", (24, 52), (33, 52), "St-Valery"],
+        ["Rouen", (34, 50), (32, 48), "St-Valery"],
+        ["Dives", (23, 52), (32, 52), "St-Valery"],
     ]
     for path in roads:
         coords = [town_xy(towns, p) if isinstance(p, str) else p for p in path]
-        paint_line(grid, coords, ROAD, WALKABLE)
+        paint_road(grid, coords)
 
     # Roads bridge rivers. Put a quay back on any required port the pavement sealed off.
-    # Never cut the x=25 Ermine Street corridor between York and London.
     for t in towns:
         if t["name"] not in REQUIRED_PORTS:
             continue
@@ -299,7 +335,7 @@ def build():
                 continue
             if grid[yy][xx] in (SEA, TOWN):
                 continue
-            if xx == 25 and 23 <= yy <= 38:
+            if xx == SPINE_X and SPINE_Y0 <= yy <= SPINE_Y1:
                 continue
             grid[yy][xx] = RIVER
             opened = True
@@ -395,6 +431,10 @@ def channel_steps(grid, origin, landings):
     return None
 
 
+def _xs(grid, y):
+    return [x for x in range(W) if grid[y][x] != SEA]
+
+
 def validate(grid, towns):
     by = {t["name"]: t for t in towns}
     errors = []
@@ -412,8 +452,9 @@ def validate(grid, towns):
     if costs is not None:
         weeks = weeks_for(costs)
         need(weeks <= 2, f"London–York road is {len(costs)} steps, {weeks} fair weeks (want about 2)")
-        # Lincoln has to sit on that road, not off on a side track.
         need(grid[lincoln["y"]][lincoln["x"]] == TOWN, "Lincoln missing")
+        on_road = road_costs(grid, (london["x"], london["y"]), (lincoln["x"], lincoln["y"]))
+        need(on_road is not None, "Lincoln is off Ermine Street")
 
     hastings, pevensey, dover = by["Hastings"], by["Pevensey"], by["Dover"]
     need(pevensey["x"] < hastings["x"] < dover["x"], "Sussex shore should run Pevensey, Hastings, Dover west to east")
@@ -427,15 +468,17 @@ def validate(grid, towns):
     dives = by["Dives"]
     need(stv["y"] > hastings["y"], "St-Valery should lie across the Channel from Hastings")
     need(abs(stv["x"] - hastings["x"]) <= 4, "St-Valery should stand opposite Sussex, not off in Brittany")
-    need(stv["y"] >= 49 and dives["y"] >= 49, "Norman ports must stay south of the England latitude line")
+    need(stv["y"] >= 47 and dives["y"] >= 47, "Norman ports must stay south of the England latitude line")
 
-    for y in range(H):
+    for y in range(45, 47):
         for x in range(W):
-            if grid[y][x] == SEA:
-                continue
-            if 46 <= y <= 48:
+            if grid[y][x] != SEA:
                 errors.append(f"land in the Channel at {x},{y}")
                 break
+
+    for t in towns:
+        if t["owner"] == "norman":
+            need(t["y"] > 46, f"{t['name']} is on the England side of the latitude line")
 
     win = by["Winchester"]
     need(win["x"] < london["x"] and win["y"] > london["y"] - 1, "Winchester should sit in Wessex, southwest of London")
@@ -451,12 +494,28 @@ def validate(grid, towns):
     for name in REQUIRED_PORTS:
         need(by[name]["port"], f"{name} is not a port")
 
-    # Cornwall is the southwestern tip; the Isle of Wight sits further east.
-    # Wales bulges west of the Midlands.
-    corn = [x for y in range(43, 46) for x in range(16) if grid[y][x] != SEA]
-    wales = min((x for y in range(28, 35) for x in range(W) if grid[y][x] != SEA), default=99)
-    need(wales <= 6, "Wales should bulge to the western sea")
-    need(bool(corn) and min(corn) <= 6, "Cornwall should be the southwestern peninsula")
+    # Silhouette, so a later edit cannot smooth these back into a blob.
+    wales = min((x for y in range(15, 34) for x in _xs(grid, y)), default=99)
+    need(wales <= 3, "Wales should jut to the western sea")
+    cardigan = min(_xs(grid, 23), default=0)
+    need(cardigan >= 9, "Cardigan Bay should indent the Welsh coast")
+    wash = max(_xs(grid, 25), default=99)
+    anglia = max(_xs(grid, 29), default=0)
+    need(wash <= 27 and anglia >= 40, "the Wash should bite, and East Anglia should bulge east of it")
+    thames = max(_xs(grid, 32), default=99)
+    need(thames <= 28, "the Thames estuary should cut in east of London")
+    need(grid[34][5] != SEA and grid[34][15] == SEA, "the Bristol Channel should separate South Wales from Somerset")
+    need(bool(_xs(grid, 44)) and min(_xs(grid, 44)) <= 7, "Cornwall should be the southwestern peninsula")
+    corn = [x for y in range(41, 45) for x in range(14) if grid[y][x] != SEA]
+    need(bool(corn) and min(corn) <= 6, "Cornwall should run to the southwest")
+    need(grid[40][8] != SEA and grid[40][16] == SEA and grid[40][24] != SEA, "Lyme Bay should open on the south coast")
+    # Isle of Wight: land with sea to the north, south, west, and east.
+    need(grid[43][25] != SEA and grid[44][25] != SEA, "the Isle of Wight should sit in the Solent")
+    need(
+        grid[42][25] == SEA and grid[45][25] == SEA and grid[43][23] == SEA and grid[43][27] == SEA,
+        "the Isle of Wight should be an island, not a bump on Hampshire",
+    )
+    need(grid[47][14] != SEA and grid[47][33] != SEA and grid[48][24] == SEA, "Cotentin and St-Valery should be two headlands with the Seine bay between")
 
     if errors:
         raise SystemExit("map check failed:\n- " + "\n- ".join(errors))
