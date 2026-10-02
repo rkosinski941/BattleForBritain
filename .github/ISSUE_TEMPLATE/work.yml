@@ -1,0 +1,26 @@
+name: Work for Grok Bot
+description: A change the bot should implement as a PR
+labels: ["bot"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: One outcome. The game should still be playable when the PR lands.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: Checks a reviewer can run without guessing.
+    validations:
+      required: true
+  - type: textarea
+    id: out
+    attributes:
+      label: Out of scope
+      description: What this issue must not change.
+  - type: markdown
+    attributes:
+      value: "Grok Bot — clone rkosinski941/BattleForBritain, implement this on a feature branch, open a PR, do not merge."

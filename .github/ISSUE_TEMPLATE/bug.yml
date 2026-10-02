@@ -1,0 +1,26 @@
+name: Bug
+description: Something in the campaign is wrong
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you saw, what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Keys, clicks, turn number, weather if it matters.
+    validations:
+      required: true
+  - type: input
+    id: turn
+    attributes:
+      label: Date or turn
+      placeholder: "e.g. 22 September 1066, turn 2"
+  - type: markdown
+    attributes:
+      value: "Grok Bot — implement this on a branch and open a PR. Do not merge."
