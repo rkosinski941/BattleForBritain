@@ -34,6 +34,6 @@ If you change coasts or towns, regenerate with `python tools/gen_map.py` and che
 ## Cursor Cloud specific instructions
 
 - Python 3 on the base image is enough. There is no package install. `data/map.json` is already committed.
-- The `game` terminal serves this repo with `python3 -m http.server 8080`. If it is not running, start that command from the repo root.
+- On boot, the environment start command serves this repo with `python3 -m http.server 8080` and exits once port 8080 answers. If it is not running, start that command from the repo root.
 - Open `http://localhost:8080`. Modules do not load from `file://`.
 - Verify in the browser: title screen, Cross the Channel, hold a Norman unit, plot an order, Execute week, and confirm the HUD date moves past 18 September 1066.
