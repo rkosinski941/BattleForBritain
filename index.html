@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Battle for Britain, 1066</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="title" class="screen">
+      <div class="veil">
+        <p class="kicker">Anno Domini MLXVI</p>
+        <h1>Battle for Britain</h1>
+        <p class="sub">The Norman Invasion</p>
+        <p class="tag">A scrolling campaign in the manner of Chris Crawford’s Eastern Front</p>
+        <label class="diff">
+          Difficulty
+          <select id="diff">
+            <option value="easy">Easy — a kinder Channel</option>
+            <option value="normal" selected>Normal — the year as it was</option>
+            <option value="hard">Hard — a stubborn island</option>
+          </select>
+        </label>
+        <div class="row">
+          <button id="play" disabled>Cross the Channel</button>
+          <button id="open-help" class="ghost">How to play</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="howto" class="modal" hidden>
+      <div class="panel">
+        <h2>How to play</h2>
+        <p>
+          You are William, Duke of Normandy. Issue orders to your host, then execute the week. English and Norse
+          orders resolve at the same time as yours.
+        </p>
+        <ul>
+          <li>Move the pink cursor with the arrow keys or WASD. The map scrolls at the edges of the screen.</li>
+          <li>Enter picks up a Norman unit. Further arrow keys plot up to eight marching orders. Enter puts it down.</li>
+          <li>Click a unit, then click a destination, to plot a path. Backspace undoes one order; Space clears them.</li>
+          <li>T (or Execute week) runs thirty-two ticks of movement and combat. Space skips the animation.</li>
+          <li>March a land unit onto a friendly fleet at the coast to embark. Order it onto an English beach to land.</li>
+          <li>Gales close the Channel. Harold will march north on Hardrada first. That is your opening.</li>
+          <li>Hold London, and Winchester or Harold’s death, before Christmas.</li>
+        </ul>
+        <button id="close-help">To the map</button>
+      </div>
+    </div>
+
+    <div id="game" hidden>
+      <canvas id="map" tabindex="0"></canvas>
+      <aside id="hud"></aside>
+    </div>
+
+    <div id="end" class="screen dim" hidden>
+      <div class="veil">
+        <p class="kicker">The campaign is ended</p>
+        <h1>Battle for Britain</h1>
+        <p id="end-text" class="sub"></p>
+        <p id="end-score" class="tag"></p>
+        <button id="again">Take the field again</button>
+      </div>
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
