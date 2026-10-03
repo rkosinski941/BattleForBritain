@@ -50,10 +50,11 @@ WALKABLE = {CLEAR, FOREST, HILL, MARSH, BEACH, RIVER, ROAD}
 # Inclusive west-east spans, traced from the reference coastline.
 # Spine x=26: York y=16, Lincoln y=22, London y=30.
 LAND = {
-    # Scotland: a narrow tip widening into the Borders.
-    1: [(25, 28)],
-    2: [(24, 30)],
-    3: [(23, 31)],
+    # Northern shoulder. Wide enough that out-of-play Scotland can continue
+    # the same coasts instead of sitting on a four-cell neck.
+    1: [(23, 30)],
+    2: [(22, 31)],
+    3: [(22, 32)],
     4: [(22, 32)],
     5: [(21, 33)],
     6: [(20, 33)],
@@ -66,19 +67,20 @@ LAND = {
     12: [(14, 35)],
     13: [(15, 35)],
     14: [(12, 35)],
-    # Wales bulges west. The Humber is a short funnel east of York.
-    15: [(8, 35)],
-    16: [(6, 31)],
-    17: [(4, 30)],
-    18: [(3, 35)],
-    19: [(3, 36)],
-    20: [(3, 36)],
+    # Wales bulges west, one cell shy of the previous mask. The Humber is a
+    # short funnel east of York.
+    15: [(9, 35)],
+    16: [(7, 31)],
+    17: [(5, 30)],
+    18: [(4, 35)],
+    19: [(4, 36)],
+    20: [(4, 36)],
     # The Wash, west of the later East Anglian bulge. Lincoln is x=26.
-    21: [(3, 33)],
-    22: [(3, 29)],
-    23: [(3, 28)],
-    24: [(3, 30)],
-    25: [(3, 36)],
+    21: [(4, 33)],
+    22: [(4, 29)],
+    23: [(4, 28)],
+    24: [(4, 30)],
+    25: [(4, 36)],
     # East Anglia, then the Thames estuary east of London.
     26: [(4, 40)],
     27: [(4, 40)],
@@ -96,12 +98,14 @@ LAND = {
     # Sussex shore. Sea is immediately south of the eastern span.
     37: [(3, 14), (19, 34)],
     # Cornwall continues southwest. The second span is the Isle of Wight.
+    # Row 43 lengthens the point without entering the open Channel.
     38: [(2, 12)],
     39: [(2, 10), (22, 26)],
     40: [(3, 8), (23, 25)],
     41: [(4, 7)],
     42: [(5, 6)],
-    # 43-46 the Manche: open water from Cornwall's tip to Ponthieu.
+    43: [(4, 6)],
+    # 44-46 the Manche: open water from Cornwall's point to Ponthieu.
     # Cotentin thumb, Seine bay, and the Ponthieu shore at St-Valery.
     47: [(16, 21), (30, 37)],
     48: [(15, 23), (29, 39)],
@@ -212,7 +216,7 @@ def apply_beaches(grid):
             sea_s = y + 1 < H and grid[y + 1][x] == SEA
             sea_e = x + 1 < W and grid[y][x + 1] == SEA
             # South coast facing the Channel, including Cornwall and Wight.
-            if 36 <= y <= 42 and sea_s:
+            if 36 <= y <= 43 and sea_s:
                 grid[y][x] = BEACH
             # Dover's cliff, east and south.
             elif 33 <= y <= 36 and x >= 36 and (sea_s or sea_e):
@@ -555,27 +559,28 @@ def outline_spans():
     the Seine bay, and the open Channel survive wherever they already are land
     or wherever these spans deliberately stop short of them.
     """
-    # Scotland continues the island north of the playable tip (small y=1,
-    # x=25..28). The join matches that tip; the body widens, then the
-    # Highlands taper to a northern cape.
-    tip_x0, tip_x1 = OX + 25, OX + 28
+    # Scotland, north of the playable shoulder (small y=1, x=23..30).
+    # The east coast is nearly straight. The west coast steps out, then the
+    # whole island tapers to a northern cape. It meets the shoulder on the
+    # row above the playable tip.
+    west, east = OX + 23, OX + 30
     scotland = {
-        1: [(tip_x0 + 4, tip_x1 + 5)],
-        2: [(tip_x0 + 3, tip_x1 + 6)],
-        3: [(tip_x0 + 2, tip_x1 + 7)],
-        4: [(tip_x0 + 1, tip_x1 + 8)],
-        5: [(tip_x0, tip_x1 + 9)],
-        6: [(tip_x0 - 1, tip_x1 + 10)],
-        7: [(tip_x0 - 2, tip_x1 + 10)],
-        8: [(tip_x0 - 4, tip_x1 + 11)],
-        9: [(tip_x0 - 5, tip_x1 + 11)],
-        10: [(tip_x0 - 6, tip_x1 + 12)],
-        11: [(tip_x0 - 6, tip_x1 + 11)],
-        12: [(tip_x0 - 5, tip_x1 + 10)],
-        13: [(tip_x0 - 4, tip_x1 + 8)],
-        14: [(tip_x0 - 3, tip_x1 + 6)],
-        15: [(tip_x0 - 1, tip_x1 + 4)],
-        OY: [(tip_x0, tip_x1 + 2)],
+        1: [(west + 6, east - 1)],
+        2: [(west + 5, east)],
+        3: [(west + 4, east)],
+        4: [(west + 3, east + 1)],
+        5: [(west + 2, east + 2)],
+        6: [(west + 1, east + 2)],
+        7: [(west, east + 2)],
+        8: [(west - 2, east + 2)],
+        9: [(west - 4, east + 2)],
+        10: [(west - 5, east + 2)],
+        11: [(west - 5, east + 2)],
+        12: [(west - 4, east + 2)],
+        13: [(west - 3, east + 2)],
+        14: [(west - 2, east + 2)],
+        15: [(west - 1, east + 2)],
+        OY: [(west - 1, east + 1)],
     }
 
     # Brittany, west of the Cotentin, with the Gulf of Saint-Malo kept as sea
