@@ -8,6 +8,7 @@ export const TERRAIN = {
   RIVER: 6,
   ROAD: 7,
   TOWN: 8,
+  OUT: 9,
 };
 
 export const TNAME = [
@@ -20,6 +21,7 @@ export const TNAME = [
   "river",
   "road",
   "town",
+  "out of play",
 ];
 
 export const DIRS = {
@@ -44,15 +46,15 @@ export const DIR_KEYS = {
   D: "E",
 };
 
-// Indexed by terrain enum. 99 = impassable.
+// Indexed by terrain enum. 99 = impassable. The last entry is out-of-play land.
 export const MOVE_COST = {
-  knights: [99, 5, 4, 12, 8, 16, 10, 3, 4],
-  infantry: [99, 6, 6, 8, 8, 12, 10, 4, 5],
-  archers: [99, 6, 6, 8, 8, 12, 10, 4, 5],
-  housecarls: [99, 6, 6, 8, 7, 12, 10, 4, 5],
-  fyrd: [99, 7, 7, 10, 9, 14, 12, 5, 6],
-  huscarls: [99, 6, 6, 8, 8, 12, 10, 4, 5],
-  fleet: [3, 4, 99, 99, 99, 99, 4, 99, 4],
+  knights: [99, 5, 4, 12, 8, 16, 10, 3, 4, 99],
+  infantry: [99, 6, 6, 8, 8, 12, 10, 4, 5, 99],
+  archers: [99, 6, 6, 8, 8, 12, 10, 4, 5, 99],
+  housecarls: [99, 6, 6, 8, 7, 12, 10, 4, 5, 99],
+  fyrd: [99, 7, 7, 10, 9, 14, 12, 5, 6, 99],
+  huscarls: [99, 6, 6, 8, 8, 12, 10, 4, 5, 99],
+  fleet: [3, 4, 99, 99, 99, 99, 4, 99, 4, 99],
 };
 
 export const TYPE_LABEL = {
@@ -108,8 +110,13 @@ export function isNavalTerrain(map, x, y) {
   return t === TERRAIN.SEA || t === TERRAIN.BEACH || t === TERRAIN.RIVER || isPort(map, x, y);
 }
 
+// Playable England is y <= 46 on the operational mask. tools/gen_map.py
+// inserts 16 out-of-play rows of Scotland above that mask.
+// tools/gen_map.py checks this constant.
+export const ENGLAND_LAT = 62;
+
 export function englandLat(y) {
-  return y <= 46;
+  return y <= ENGLAND_LAT;
 }
 
 function occupyKey(x, y) {
@@ -122,7 +129,9 @@ function placeNear(map, taken, x, y, naval) {
   while (q.length) {
     const [cx, cy] = q.shift();
     const terr = terrainAt(map, cx, cy);
-    const ok = naval ? isNavalTerrain(map, cx, cy) : terr !== TERRAIN.SEA;
+    const ok = naval
+      ? isNavalTerrain(map, cx, cy)
+      : terr !== TERRAIN.SEA && terr !== TERRAIN.OUT;
     if (ok && !taken.has(occupyKey(cx, cy))) {
       taken.add(occupyKey(cx, cy));
       return { x: cx, y: cy };

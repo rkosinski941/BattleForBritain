@@ -188,6 +188,7 @@ export function moveCost(game, unit, x, y) {
 export function canEnter(game, unit, x, y) {
   if (!inBounds(game.map, x, y)) return false;
   const terr = terrainAt(game.map, x, y);
+  if (terr === TERRAIN.OUT) return false;
   if (unit.type === "fleet") {
     if (!isNavalTerrain(game.map, x, y)) return false;
     return moveCost(game, unit, x, y) < 90;
@@ -428,6 +429,7 @@ function inSupply(game, u) {
       const k = key(nx, ny);
       if (seen.has(k) || !inBounds(game.map, nx, ny)) continue;
       const terr = terrainAt(game.map, nx, ny);
+      if (terr === TERRAIN.OUT) continue;
       if (terr === TERRAIN.SEA && u.side !== "norman" && u.side !== "norse") continue;
       const enemy = landUnitAt(game, nx, ny);
       if (enemy && enemy.side !== u.side) continue;

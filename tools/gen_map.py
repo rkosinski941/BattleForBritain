@@ -1,11 +1,17 @@
 """Generate a square-grid operational map of Britain and Normandy, 1066.
 
-The land mask follows the Norman Conquest reference: a long island (Scotland
-tip, Wales bulging west, Cornwall to the southwest), a broad Channel, and
-Normandy with the Cotentin thumb west of a Seine bay and Saint-Valery opposite
-Hastings. England stays on y <= 43. Rows 44-46 are open water. Normandy and
-Ponthieu start at y >= 47, south of the latitude src/world.js treats as
-England (y <= 46).
+The playable land mask follows the Norman Conquest reference: a long island
+(Scotland tip, Wales bulging west, Cornwall to the southwest), a broad Channel,
+and Normandy with the Cotentin thumb west of a Seine bay and Saint-Valery
+opposite Hastings. On that mask England stays on y <= 43. Rows 44-46 are open
+water. Normandy and Ponthieu start at y >= 47, south of the latitude
+src/world.js treats as England.
+
+Scotland, Brittany, Maine, Anjou, and Flanders are drawn around that mask as
+out-of-play land (terrain 9). They are hatched and impassable. The playable
+cells, towns, roads, and the Channel band are copied through unchanged, then
+shifted by the padding that makes room for the outline. ENGLAND_LAT in
+src/world.js moves with that north padding.
 
 Ermine Street is the straight north road London–Lincoln–York. In fair weather
 a housecarl spends four ticks on a road cell and five on a town, with 32 ticks
@@ -19,7 +25,14 @@ from pathlib import Path
 
 W, H = 46, 64
 
+# Padding around the playable mask. North is Scotland, west is Brittany,
+# east is Flanders and Boulogne, south is Maine and Anjou.
+OX, OY = 14, 16
+EAST, SOUTH = 16, 18
+BIG_W, BIG_H = W + OX + EAST, H + OY + SOUTH
+
 SEA, BEACH, CLEAR, FOREST, HILL, MARSH, RIVER, ROAD, TOWN = range(9)
+OUT = 9
 CH = {
     SEA: "~",
     BEACH: ",",
@@ -30,6 +43,7 @@ CH = {
     RIVER: "=",
     ROAD: ":",
     TOWN: "#",
+    OUT: "x",
 }
 WALKABLE = {CLEAR, FOREST, HILL, MARSH, BEACH, RIVER, ROAD}
 
@@ -509,27 +523,277 @@ def validate(grid, towns):
     return {"ermine_steps": len(costs) if costs else None, "ermine_weeks": weeks, "channel_steps": steps}
 
 
+def _paint_out(grid, spans):
+    painted = 0
+    for y, ranges in spans.items():
+        if not (0 <= y < BIG_H):
+            raise SystemExit(f"out-of-play row {y} is off the map")
+        for west, east in ranges:
+            for x in range(west, east + 1):
+                if not (0 <= x < BIG_W):
+                    raise SystemExit(f"out-of-play cell {x},{y} is off the map")
+                if grid[y][x] == SEA:
+                    grid[y][x] = OUT
+                    painted += 1
+    return painted
+
+
+def _shift_towns(towns):
+    moved = []
+    for t in towns:
+        copy = dict(t)
+        copy["x"] += OX
+        copy["y"] += OY
+        moved.append(copy)
+    return moved
+
+
+def outline_spans():
+    """Scotland and the rest of northern France, in big-map coordinates.
+
+    Spans are inclusive. Painting only replaces sea, so the playable mask,
+    the Seine bay, and the open Channel survive wherever they already are land
+    or wherever these spans deliberately stop short of them.
+    """
+    # Scotland continues the island north of the playable tip (small y=1,
+    # x=25..28). The join matches that tip; the body widens, then the
+    # Highlands taper to a northern cape.
+    tip_x0, tip_x1 = OX + 25, OX + 28
+    scotland = {
+        1: [(tip_x0 + 4, tip_x1 + 5)],
+        2: [(tip_x0 + 3, tip_x1 + 6)],
+        3: [(tip_x0 + 2, tip_x1 + 7)],
+        4: [(tip_x0 + 1, tip_x1 + 8)],
+        5: [(tip_x0, tip_x1 + 9)],
+        6: [(tip_x0 - 1, tip_x1 + 10)],
+        7: [(tip_x0 - 2, tip_x1 + 10)],
+        8: [(tip_x0 - 4, tip_x1 + 11)],
+        9: [(tip_x0 - 5, tip_x1 + 11)],
+        10: [(tip_x0 - 6, tip_x1 + 12)],
+        11: [(tip_x0 - 6, tip_x1 + 11)],
+        12: [(tip_x0 - 5, tip_x1 + 10)],
+        13: [(tip_x0 - 4, tip_x1 + 8)],
+        14: [(tip_x0 - 3, tip_x1 + 6)],
+        15: [(tip_x0 - 1, tip_x1 + 4)],
+        OY: [(tip_x0, tip_x1 + 2)],
+    }
+
+    # Brittany, west of the Cotentin, with the Gulf of Saint-Malo kept as sea
+    # between this outline and the playable west coast (small x about 6..16).
+    brittany = {
+        OY + 49: [(2, OX + 4)],
+        OY + 50: [(1, OX + 5)],
+        OY + 51: [(1, OX + 4)],
+        OY + 52: [(1, OX + 3)],
+        OY + 53: [(2, OX + 4)],
+        OY + 54: [(2, OX + 6)],
+        OY + 55: [(3, OX + 8)],
+        OY + 56: [(4, OX + 9)],
+        OY + 57: [(5, OX + 10)],
+        OY + 58: [(6, OX + 12)],
+        OY + 59: [(8, OX + 13)],
+    }
+
+    # Maine and Anjou south of Normandy, wide enough to read as the rest of
+    # the French interior rather than a second thin coast.
+    maine = {
+        OY + 60: [(4, OX + 36)],
+        OY + 61: [(6, OX + 38)],
+        OY + 62: [(8, OX + 40)],
+        OY + 63: [(10, OX + 40)],
+        OY + 64: [(12, OX + 38)],
+        OY + 65: [(14, OX + 36)],
+        OY + 66: [(16, OX + 34)],
+        OY + 67: [(18, OX + 32)],
+        OY + 68: [(20, OX + 30)],
+        OY + 69: [(22, OX + 28)],
+        OY + 70: [(24, OX + 26)],
+        OY + 71: [(26, OX + 24)],
+        OY + 72: [(28, OX + 22)],
+        OY + 73: [(30, OX + 18)],
+    }
+
+    # Flanders and Boulogne continue the continental coast east of Ponthieu.
+    # The headland north of the French shore stays east of the playable
+    # rectangle, so the open Channel in front of Hastings is untouched and the
+    # strait still narrows toward Dover.
+    # Solid Boulogne headland. It stays east of the playable rectangle, opposite
+    # Dover, and joins the continental shore on the next row.
+    flanders = {
+        OY + 32: [(OX + W + 8, BIG_W - 2)],
+        OY + 33: [(OX + W + 7, BIG_W - 2)],
+        OY + 34: [(OX + W + 6, BIG_W - 2)],
+        OY + 35: [(OX + W + 5, BIG_W - 2)],
+        OY + 36: [(OX + W + 4, BIG_W - 2)],
+        OY + 37: [(OX + W + 4, BIG_W - 2)],
+        OY + 38: [(OX + W + 3, BIG_W - 2)],
+        OY + 39: [(OX + W + 3, BIG_W - 2)],
+        OY + 40: [(OX + W + 2, BIG_W - 2)],
+        OY + 41: [(OX + W + 2, BIG_W - 2)],
+        OY + 42: [(OX + W + 1, BIG_W - 2)],
+        OY + 43: [(OX + W + 1, BIG_W - 2)],
+        OY + 44: [(OX + W, BIG_W - 2)],
+        OY + 45: [(OX + W, BIG_W - 2)],
+        OY + 46: [(OX + W, BIG_W - 2)],
+        OY + 47: [(OX + 38, BIG_W - 2)],
+        OY + 48: [(OX + 40, BIG_W - 3)],
+        OY + 49: [(OX + 41, BIG_W - 3)],
+        OY + 50: [(OX + 42, BIG_W - 3)],
+        OY + 51: [(OX + 43, BIG_W - 4)],
+        OY + 52: [(OX + 43, BIG_W - 4)],
+        OY + 53: [(OX + 42, BIG_W - 5)],
+        OY + 54: [(OX + 41, BIG_W - 6)],
+        OY + 55: [(OX + 40, BIG_W - 8)],
+        OY + 56: [(OX + 38, BIG_W - 10)],
+        OY + 57: [(OX + 36, BIG_W - 12)],
+        OY + 58: [(OX + 34, BIG_W - 14)],
+        OY + 59: [(OX + 32, BIG_W - 16)],
+    }
+    return scotland, brittany, maine, flanders
+
+
+def compose(small, towns):
+    """Copy the playable mask onto a larger map and outline the rest."""
+    big = [[SEA for _ in range(BIG_W)] for _ in range(BIG_H)]
+    for y in range(H):
+        for x in range(W):
+            big[y + OY][x + OX] = small[y][x]
+
+    scotland, brittany, maine, flanders = outline_spans()
+    counts = {
+        "scotland": _paint_out(big, scotland),
+        "brittany": _paint_out(big, brittany),
+        "maine": _paint_out(big, maine),
+        "flanders": _paint_out(big, flanders),
+    }
+    moved = _shift_towns(towns)
+    check_outline(small, big, moved, counts)
+    return big, moved, counts
+
+
+def check_outline(small, big, towns, counts):
+    import re
+
+    errors = []
+
+    def need(cond, msg):
+        if not cond:
+            errors.append(msg)
+
+    for y in range(H):
+        for x in range(W):
+            src = small[y][x]
+            dst = big[y + OY][x + OX]
+            if src != SEA and dst != src:
+                errors.append(f"playable cell changed at {x},{y}")
+                break
+            if src == SEA and dst not in (SEA, OUT):
+                errors.append(f"sea beside the playable mask became {dst} at {x},{y}")
+                break
+
+    # The Manche in front of the playable coasts stays water, including the
+    # rows that the Flanders headland is allowed to approach only further east.
+    for y in range(44, 47):
+        for x in range(W):
+            if big[y + OY][x + OX] != SEA:
+                errors.append(f"out-of-play land in the Channel at {x + OX},{y + OY}")
+                break
+
+    for name, n in counts.items():
+        need(n >= 40, f"{name} outline is only {n} cells")
+
+    # The playable tip's northern neighbour is Scotland, not a blank edge.
+    tip_y = OY + 1
+    tip_xs = [x for x in range(BIG_W) if big[tip_y][x] not in (SEA, OUT)]
+    need(bool(tip_xs), "playable northern tip missing")
+    if tip_xs:
+        joined = any(big[tip_y - 1][x] == OUT for x in tip_xs)
+        need(joined, "Scotland does not touch the playable island")
+
+    # Brittany stays west of the Cotentin, Maine south of Normandy, Flanders
+    # east of Ponthieu. These are existence checks, not a redraw of the coast.
+    need(any(big[OY + 52][x] == OUT for x in range(0, OX)), "Brittany should lie west of Normandy")
+    need(any(big[OY + 64][x] == OUT for x in range(BIG_W)), "Maine should lie south of Normandy")
+    need(any(big[OY + 47][x] == OUT for x in range(OX + 42, BIG_W)), "Flanders should lie east of Ponthieu")
+
+    # Boulogne is the same coast as Ponthieu, not a striped island in the Strait.
+    from collections import deque
+
+    cape = None
+    for y in range(OY + 32, OY + 47):
+        for x in range(BIG_W - 1, OX + W - 1, -1):
+            if big[y][x] == OUT:
+                cape = (x, y)
+                break
+        if cape:
+            break
+    need(cape is not None, "Boulogne headland missing")
+    if cape:
+        seen = {cape}
+        q = deque([cape])
+        joined = False
+        while q:
+            x, y = q.popleft()
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                xx, yy = x + dx, y + dy
+                if not (0 <= xx < BIG_W and 0 <= yy < BIG_H):
+                    continue
+                if big[yy][xx] not in (SEA, OUT):
+                    joined = True
+                if big[yy][xx] == OUT and (xx, yy) not in seen:
+                    seen.add((xx, yy))
+                    q.append((xx, yy))
+        need(joined, "Boulogne should join the French shore")
+
+    by = {t["name"]: t for t in towns}
+    for name in REQUIRED_PORTS:
+        t = by[name]
+        wet = False
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            xx, yy = t["x"] + dx, t["y"] + dy
+            if 0 <= xx < BIG_W and 0 <= yy < BIG_H and big[yy][xx] in (SEA, BEACH, RIVER):
+                wet = True
+        need(wet, f"{name} lost its water when the outline was added")
+
+    root = Path(__file__).resolve().parents[1]
+    world = (root / "src" / "world.js").read_text(encoding="utf-8")
+    match = re.search(r"ENGLAND_LAT = (\d+)", world)
+    need(match is not None and int(match.group(1)) == 46 + OY, "ENGLAND_LAT in src/world.js must equal 46 + the Scotland padding")
+    for t in towns:
+        if t["owner"] == "norman":
+            need(t["y"] > 46 + OY, f"{t['name']} is on the England side of the shifted latitude line")
+
+    if errors:
+        raise SystemExit("outline check failed:\n- " + "\n- ".join(errors))
+
+
 def main():
     grid, towns = build()
     stats = validate(grid, towns)
-    lines = ["".join(CH[c] for c in row) for row in grid]
+    big, moved, counts = compose(grid, towns)
+    lines = ["".join(CH[c] for c in row) for row in big]
     debug = "--debug" in sys.argv
     if debug:
         lines = [f"{y:02d} {line}" for y, line in enumerate(lines)]
     print("\n".join(lines))
     print("--- towns ---")
-    for t in towns:
-        print(f"{t['name']:14} {t['x']:2},{t['y']:2} port={t['port']} {CH[grid[t['y']][t['x']]]}")
+    for t in moved:
+        print(f"{t['name']:14} {t['x']:2},{t['y']:2} port={t['port']} {CH[big[t['y']][t['x']]]}")
     print(
         f"Ermine Street {stats['ermine_steps']} steps, "
         f"{stats['ermine_weeks']} fair weeks for housecarls. "
         f"Channel {stats['channel_steps']} fleet steps, St-Valery to Sussex."
     )
+    print(
+        "Out of play: "
+        + ", ".join(f"{name} {n}" for name, n in counts.items())
+        + f". Map {BIG_W}x{BIG_H}."
+    )
     out = {
-        "w": W,
-        "h": H,
-        "terrain": [cell for row in grid for cell in row],
-        "towns": towns,
+        "w": BIG_W,
+        "h": BIG_H,
+        "terrain": [cell for row in big for cell in row],
+        "towns": moved,
     }
     dest = Path(__file__).resolve().parents[1] / "data" / "map.json"
     dest.parent.mkdir(parents=True, exist_ok=True)
