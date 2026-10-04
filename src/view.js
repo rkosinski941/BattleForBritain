@@ -34,6 +34,7 @@ const PAL = {
   river: ["#3d6e96", "#4d86b0"],
   road: ["#c4a86a", "#b69658"],
   town: ["#c6b17a", "#d3c08c"],
+  out: ["#8a8174", "#6e655a"],
   grid: "rgba(40,28,16,0.18)",
   cursor: "#e84ac0",
   oak: "#140f0b",
@@ -292,7 +293,7 @@ export class GameView {
     const t = terrainAt(gmap(this.game), x, y);
     const px = x * TILE;
     const py = y * TILE;
-    const names = ["sea", "beach", "clear", "forest", "hill", "marsh", "river", "road", "town"];
+    const names = ["sea", "beach", "clear", "forest", "hill", "marsh", "river", "road", "town", "out"];
     const key = names[t] || "clear";
     const [c1, c2] = PAL[key];
     ctx.fillStyle = c1;
@@ -354,6 +355,15 @@ export class GameView {
       ctx.lineTo(px + 21, py + 4);
       ctx.lineTo(px + 27, py + 10);
       ctx.fill();
+    }
+    if (t === TERRAIN.OUT) {
+      ctx.strokeStyle = "rgba(48,40,32,0.55)";
+      ctx.beginPath();
+      for (let i = -TILE; i <= TILE; i += 8) {
+        ctx.moveTo(px + i, py);
+        ctx.lineTo(px + i + TILE, py + TILE);
+      }
+      ctx.stroke();
     }
     if (t === TERRAIN.SEA) {
       ctx.strokeStyle = "rgba(180,220,255,0.12)";
@@ -474,7 +484,7 @@ export class GameView {
     for (let y = 0; y < this.game.h; y++) {
       for (let x = 0; x < this.game.w; x++) {
         const t = terrainAt(gmap(this.game), x, y);
-        const names = ["sea", "beach", "clear", "forest", "hill", "marsh", "river", "road", "town"];
+        const names = ["sea", "beach", "clear", "forest", "hill", "marsh", "river", "road", "town", "out"];
         ctx.fillStyle = PAL[names[t] || "clear"][0];
         ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
       }
