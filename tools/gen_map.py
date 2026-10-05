@@ -61,73 +61,72 @@ WALKABLE = {CLEAR, FOREST, HILL, MARSH, BEACH, RIVER, ROAD}
 
 # Inclusive west-east spans on the playable mask.
 # Spine x=22: York y=16, Lincoln y=23, London y=30. Fourteen road steps.
+# Wales is a block on the west, not a ramp. Cornwall is a broad arm.
+# The Cotentin is a straight rectangle pointing north.
 LAND = {
-    # Northumbrian shoulder. Scotland continues these edges.
-    1: [(15, 27)],
-    2: [(14, 28)],
-    3: [(14, 28)],
-    4: [(13, 29)],
-    5: [(13, 29)],
-    6: [(12, 28)],
-    7: [(10, 28)],
-    8: [(8, 28)],
-    # The Humber bites the east coast. Wales steps out to the west.
-    9: [(6, 26)],
-    10: [(4, 23)],
-    11: [(3, 20)],
-    12: [(2, 22)],
-    13: [(1, 26)],
+    # Northumbrian shoulder. Scotland continues these same edges.
+    1: [(16, 28)],
+    2: [(16, 28)],
+    3: [(15, 29)],
+    4: [(15, 29)],
+    5: [(15, 28)],
+    6: [(15, 28)],
+    7: [(14, 27)],
+    8: [(14, 26)],
+    # The Humber bites. Wales then juts out and holds a straight west coast.
+    9: [(8, 23)],
+    10: [(4, 21)],
+    11: [(2, 20)],
+    12: [(0, 22)],
+    13: [(0, 26)],
     14: [(0, 30)],
     15: [(0, 32)],
     16: [(0, 34)],
     17: [(0, 33)],
     18: [(0, 32)],
-    19: [(1, 32)],
-    # Cardigan Bay, a shallow bite in the Welsh west coast.
-    20: [(2, 31)],
-    21: [(3, 31)],
-    22: [(2, 32)],
-    # The Wash, a deep square bite east of Lincoln.
-    23: [(1, 26)],
+    19: [(0, 32)],
+    20: [(0, 31)],
+    21: [(0, 31)],
+    22: [(0, 32)],
+    # The Wash, a deep bite east of Lincoln.
+    23: [(0, 26)],
     24: [(0, 23)],
     25: [(0, 25)],
-    # East Anglia, the rounded bulge south of the Wash.
+    # East Anglia, the bulge south of the Wash. Wales still holds the west.
     26: [(0, 32)],
-    27: [(0, 36)],
-    28: [(0, 40)],
-    29: [(1, 41)],
-    # London. The Thames estuary cuts the east coast back.
-    30: [(2, 36)],
-    # Bristol Channel, open to the western sea south of Pembrokeshire.
-    31: [(0, 14), (20, 34)],
-    32: [(0, 11), (18, 36)],
-    33: [(0, 8), (17, 38)],
-    34: [(16, 42)],
-    # Wide south coast. Cornwall leaves it toward the southwest.
-    35: [(12, 44)],
-    36: [(8, 45)],
-    37: [(5, 44)],
-    38: [(3, 42)],
-    # The arm itself, and Kent turning the southeast corner.
-    39: [(1, 6), (34, 44)],
-    40: [(0, 5), (10, 13), (36, 46)],
-    41: [(0, 4), (11, 14), (40, 46)],
-    42: [(0, 3), (43, 46)],
-    43: [(0, 2)],
-    44: [(0, 1)],
-    45: [(0, 0)],
+    27: [(0, 38)],
+    28: [(0, 42)],
+    29: [(0, 40)],
+    # Bristol Channel opens west of Somerset. The Thames cuts the east back.
+    30: [(0, 14), (20, 36)],
+    31: [(0, 12), (18, 34)],
+    32: [(0, 11), (18, 38)],
+    33: [(0, 9), (16, 40)],
+    34: [(12, 44)],
+    # Broad southwest arm, wide at the Devon base, blunt at the end.
+    35: [(8, 44)],
+    36: [(5, 44)],
+    37: [(3, 42)],
+    38: [(2, 40)],
+    39: [(0, 14), (34, 44)],
+    40: [(0, 13), (17, 20), (36, 46)],
+    41: [(0, 12), (17, 20), (40, 46)],
+    42: [(0, 11), (43, 46)],
+    43: [(0, 10)],
+    44: [(0, 8)],
+    45: [(0, 6)],
     # y=46 is open water on the mask. Boulogne, impassable, is painted there
     # afterwards so the strait can narrow without moving the latitude line.
-    # St-Valery headland, then the Cotentin fist with the Seine bay east of it.
-    47: [(22, 34)],
-    48: [(6, 17), (24, 36)],
-    49: [(6, 17), (23, 38)],
-    50: [(6, 18), (23, 40)],
-    51: [(6, 18), (22, 42)],
-    52: [(6, 18), (22, 42)],
-    53: [(7, 19), (22, 42)],
-    54: [(7, 19), (22, 42)],
-    55: [(7, 20), (22, 42)],
+    # St-Valery headland, then a blunt Cotentin fist with the Seine bay to its east.
+    47: [(24, 36)],
+    48: [(6, 20), (26, 38)],
+    49: [(6, 20), (25, 40)],
+    50: [(6, 20), (24, 42)],
+    51: [(6, 20), (24, 42)],
+    52: [(6, 20), (24, 42)],
+    53: [(6, 20), (24, 42)],
+    54: [(6, 20), (24, 42)],
+    55: [(8, 44)],
     56: [(8, 44)],
     57: [(8, 44)],
     58: [(8, 43)],
@@ -143,7 +142,7 @@ TOWNS = [
     ("Nottingham", 16, 20, 5, "english"),
     ("Norwich", 36, 28, 5, "english"),
     ("Stamford", 24, 26, 4, "english"),
-    ("Oxford", 18, 29, 5, "english"),
+    ("Oxford", 18, 28, 5, "english"),
     ("London", 22, 30, 25, "english"),
     ("Winchester", 18, 36, 15, "english"),
     ("Canterbury", 36, 38, 8, "english"),
@@ -156,10 +155,10 @@ TOWNS = [
     ("Wallingford", 20, 30, 4, "english"),
     ("Thetford", 30, 27, 3, "english"),
     ("St-Valery", 26, 47, 4, "norman"),
-    ("Bayeux", 11, 54, 3, "norman"),
+    ("Bayeux", 10, 54, 3, "norman"),
     ("Caen", 12, 57, 6, "norman"),
     ("Rouen", 32, 58, 8, "norman"),
-    ("Dives", 18, 52, 3, "norman"),
+    ("Dives", 20, 52, 3, "norman"),
 ]
 
 REQUIRED_PORTS = {
@@ -306,7 +305,7 @@ def build():
     # after the roads, with the Seine, so a road cannot seal the port.
     paint_line(
         grid,
-        [(10, 22), (14, 26), town_xy(towns, "Gloucester"), (16, 30)],
+        [(10, 22), (14, 26), town_xy(towns, "Gloucester"), (16, 29)],
         RIVER,
         WALKABLE,
     )
@@ -315,7 +314,7 @@ def build():
         ["London", "Lincoln", "York"],
         ["York", "Durham"],
         ["Dover", (44, 40), (40, 39), "Canterbury", (30, 35), (26, 32), "London"],
-        ["London", "Wallingford", "Oxford"],
+        ["London", "Wallingford", (20, 29), "Oxford"],
         ["Oxford", "Gloucester"],
         ["Exeter", "Winchester", (20, 33), (22, 31), "London"],
         ["Chichester", "Pevensey", "Hastings", "Canterbury", (40, 39), (44, 41), "Dover"],
@@ -323,10 +322,10 @@ def build():
         ["London", (24, 28), "Thetford", "Norwich"],
         ["Nottingham", "Lincoln"],
         ["Caen", "Bayeux"],
-        ["Dives", (14, 56), "Caen"],
-        ["Caen", (20, 59), "Rouen"],
+        ["Dives", (14, 54), (12, 56), "Caen"],
+        ["Caen", (22, 59), "Rouen"],
         ["Rouen", (36, 52), (32, 48), "St-Valery"],
-        ["Dives", (12, 57), (28, 60), (36, 54), (32, 48), "St-Valery"],
+        ["Dives", (14, 56), (36, 56), (36, 50), (30, 48), "St-Valery"],
     ]
     for path in roads:
         coords = [town_xy(towns, p) if isinstance(p, str) else p for p in path]
@@ -343,7 +342,7 @@ def build():
     paint_line(grid, [(23, 16), (26, 16), (26, 13)], RIVER, WALKABLE)
     paint_line(
         grid,
-        [(33, 58), (28, 56), (24, 55), (22, 55)],
+        [(33, 58), (28, 56), (24, 54)],
         RIVER,
         WALKABLE,
     )
@@ -573,9 +572,12 @@ def validate(grid, towns):
     need(bool(english), "England missing")
     south_y = max(y for _, y in english)
     tip = [x for x, y in english if y == south_y]
+    tip_w = max(tip) - min(tip) + 1
     need(south_y >= hastings["y"] + 5, f"Cornwall only reaches y={south_y}, not a southwestern arm")
-    need(max(tip) <= 6 and max(tip) - min(tip) <= 2, f"Cornwall tip {tip} should be a narrow southwestern point")
+    need(5 <= tip_w <= 10 and min(tip) <= 2, f"Cornwall tip {tip} should be a broad southwestern end, not a spike")
     arm = []
+    arm_widths = []
+    shore_x = by["Chichester"]["x"]
     for y in range(hastings["y"] + 1, south_y + 1):
         xs = _xs(grid, y)
         if not xs:
@@ -586,17 +588,22 @@ def validate(grid, towns):
                 run.append(x)
             else:
                 break
-        if max(run) <= 10 and min(run) <= 4:
+        width = max(run) - min(run) + 1
+        if max(run) < shore_x and min(run) <= 2 and width >= 6:
             arm.append(y)
+            arm_widths.append(width)
     need(len(arm) >= 6, f"Cornwall arm is only {len(arm)} rows south of Sussex")
+    need(arm_widths and sum(arm_widths) / len(arm_widths) >= 8, "Cornwall arm is a thin spike, not a broad southwest mass")
 
     wales_rows = list(range(16, 24))
     wales_west = min(min(_xs(grid, y)) for y in wales_rows)
     north_west = min(min(_xs(grid, y)) for y in range(1, 6))
-    need(wales_west <= 4, f"Wales west edge is x={wales_west}, not a western mass")
-    need(north_west - wales_west >= 7, "Wales should stand well west of Northumbria")
+    need(wales_west <= 1, f"Wales west edge is x={wales_west}, not a western mass")
+    need(north_west - wales_west >= 12, "Wales should stand well west of Northumbria")
     wales_width = max(max(_xs(grid, y)) - min(_xs(grid, y)) for y in wales_rows)
-    need(wales_width >= 18, f"Wales latitude is only {wales_width} cells wide")
+    need(wales_width >= 28, f"Wales latitude is only {wales_width} cells wide")
+    block = [min(_xs(grid, y)) for y in range(14, 27)]
+    need(max(block) - min(block) <= 1, "Wales should be a west mass with a straight coast, not a sloping shelf")
 
     wash_east = min(max(_xs(grid, y)) for y in range(23, 26))
     anglia_east = max(max(_xs(grid, y)) for y in range(26, 30))
@@ -656,14 +663,19 @@ def validate(grid, towns):
                 start = prev = x
         runs.append((start, prev))
         west_run = runs[0]
-        if west_run[1] < 20 and (west_run[0] == 0 or grid[y][west_run[0] - 1] == SEA):
+        if west_run[1] < 24 and (west_run[0] == 0 or grid[y][west_run[0] - 1] == SEA):
             if west_run[1] + 1 < W and grid[y][west_run[1] + 1] == SEA:
                 fist_rows.append((y, west_run))
     need(len(fist_rows) >= 6, f"Cotentin is only {len(fist_rows)} rows of peninsula")
     if fist_rows:
         tip_y, (tip_w, tip_e) = fist_rows[0]
         tip_width = tip_e - tip_w + 1
-        need(tip_width >= 8, f"Cotentin tip is {tip_width} cells wide, not a fist")
+        need(tip_width >= 12, f"Cotentin tip is {tip_width} cells wide, not a fist")
+        widths = [e - w + 1 for _, (w, e) in fist_rows]
+        need(min(widths) >= 12, "Cotentin should stay fist-wide down its length")
+        wests = [w for _, (w, _) in fist_rows]
+        easts = [e for _, (_, e) in fist_rows]
+        need(max(wests) - min(wests) <= 2 and max(easts) - min(easts) <= 2, "Cotentin should be a straight fist, not a curled hook")
         need(by["Caen"]["y"] - tip_y >= 6, "Cotentin should point well north of Caen")
         need(tip_y <= 49, f"Cotentin tip at y={tip_y} does not reach toward England")
         bay = any(grid[tip_y][x] == SEA for x in range(tip_e + 1, stv["x"]))
@@ -709,26 +721,13 @@ def outline_spans():
     Negative coordinates fall in the padding. Painting only replaces sea, so
     the playable coast, the Seine bay, and the open Channel stay as they are.
     """
-    # Scotland continues the Northumbrian shoulder (y=1 is x=15..27), widens
-    # slightly through the Highlands, then tapers to a northern cape.
-    scotland = {
-        -15: [(20, 23)],
-        -14: [(18, 25)],
-        -13: [(17, 26)],
-        -12: [(16, 27)],
-        -11: [(15, 28)],
-        -10: [(14, 29)],
-        -9: [(13, 30)],
-        -8: [(12, 30)],
-        -7: [(12, 29)],
-        -6: [(13, 29)],
-        -5: [(14, 28)],
-        -4: [(14, 28)],
-        -3: [(15, 28)],
-        -2: [(15, 28)],
-        -1: [(15, 28)],
-        0: [(15, 28)],
-    }
+    # Scotland continues the Northumbrian shoulder (y=1 is x=16..28) at the
+    # same width. It is the island going north, not a pointed cap.
+    scotland = {y: [(16, 28)] for y in range(-15, 1)}
+    scotland[-12] = [(15, 29)]
+    scotland[-11] = [(15, 29)]
+    scotland[-10] = [(15, 29)]
+    scotland[-15] = [(17, 27)]
 
     # Brittany points west under the wide western Channel. Northern rows stay
     # west of Normandy so the Gulf of Saint-Malo stays open. The southern
@@ -840,10 +839,14 @@ def check_outline(small, big, towns, counts):
         joined = any(big[border - 1][x] == OUT for x in shoulder)
         need(joined, "a sea gap separates Scotland from England")
 
-    # The far north is a cape of the same island, not a blob sitting on the border.
+    # The far north continues the island. A thin point or a fat blob reads as a cap.
     cape_y = 1
     cape = [x for x in range(BIG_W) if big[cape_y][x] == OUT]
-    need(bool(cape) and max(cape) - min(cape) <= 6, "Scotland should taper to a northern cape")
+    if cape and shoulder:
+        cape_w = max(cape) - min(cape) + 1
+        shoulder_w = max(shoulder) - min(shoulder) + 1
+        need(cape_w >= 8 and cape_w + 4 >= shoulder_w, "Scotland should continue the island northward, not shrink into a cap")
+        need(cape_w <= shoulder_w + 6, "Scotland's north should not balloon into a separate cap")
 
     by = {t["name"]: t for t in towns}
     dover_x = by["Dover"]["x"]
