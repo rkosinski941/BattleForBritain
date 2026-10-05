@@ -1,17 +1,19 @@
 """Generate a square-grid operational map of Britain and Normandy, 1066.
 
-The silhouette follows the Norman Conquest plate, not its political colours:
+The silhouette follows the simple terrain plate: one long island, a broad
+Wales, a long southwest Cornwall, and the Channel as a strait.
 
-- Britain is one tall island. Scotland, north of the campaign, continues the
-  same coasts and stays impassable. The playable north is the Northumbrian
-  shoulder, not a neck under a gray hat.
-- Wales is the western mass. Cornwall is a long arm to the southwest.
-  East Anglia bulges east of the Wash. Kent is the southeast corner.
-- The Channel is a strait: wide between Cornwall and Brittany, about a
-  fair-weather week from St-Valery to Sussex, and only a few cells at Dover.
-- The Cotentin is a north-pointing fist west of the Seine bay. Brittany,
-  impassable, points west under the western Channel. Maine and Flanders
-  continue the French land without wrapping the playable coast.
+- Britain is one island. Scotland continues the same coasts north of the
+  campaign and stays impassable.
+- Wales is the broad western mass. Cornwall is a long arm to the southwest.
+  The south coast runs wide from that arm to Kent, the southeast corner.
+  The Wash and the Humber bite the east coast. East Anglia is the bulge
+  between the Wash and the Thames.
+- The Channel is wide in the west and only a couple of cells at Dover.
+  St-Valery to Sussex is a fair-weather week.
+- The Cotentin is a north-pointing fist. Brittany, impassable, points west
+  under the western Channel. Normandy is the playable shore between them.
+  Maine and Flanders continue the French land without wrapping that shore.
 
 Playable England is small-grid y <= 45, with y = 46 left as water so
 Boulogne can approach Dover. Normandy starts at y >= 47, south of the
@@ -29,12 +31,12 @@ import json
 import sys
 from pathlib import Path
 
-# Playable mask. The island is deliberately narrower than the old blob so
-# the bulges read. Padding: north Scotland, west Brittany, east Flanders,
-# south Maine and Anjou.
-W, H = 40, 70
-OX, OY = 16, 16
-EAST, SOUTH = 8, 4
+# Playable mask. Width is the Wales-to-Kent span; height is the long island
+# down the Cornish arm. Padding: north Scotland, west Brittany, east
+# Flanders, south Maine.
+W, H = 48, 70
+OX, OY = 18, 16
+EAST, SOUTH = 8, 6
 BIG_W, BIG_H = W + OX + EAST, H + OY + SOUTH
 
 # Small-grid row that src/world.js still treats as the south edge of England
@@ -58,106 +60,106 @@ CH = {
 WALKABLE = {CLEAR, FOREST, HILL, MARSH, BEACH, RIVER, ROAD}
 
 # Inclusive west-east spans on the playable mask.
-# Spine x=16: York y=16, Lincoln y=23, London y=30. Fourteen road steps.
+# Spine x=22: York y=16, Lincoln y=23, London y=30. Fourteen road steps.
 LAND = {
     # Northumbrian shoulder. Scotland continues these edges.
-    1: [(12, 22)],
-    2: [(11, 22)],
-    3: [(11, 23)],
-    4: [(10, 23)],
-    5: [(10, 23)],
-    # Solway Firth, then Cumbria falling away toward Wales.
-    6: [(12, 24)],
-    7: [(9, 24)],
-    8: [(7, 24)],
-    9: [(6, 23)],
-    10: [(5, 23)],
-    # The Humber bites east of the Vale. Wales is the western mass.
-    11: [(3, 22)],
-    12: [(2, 20)],
-    13: [(2, 19)],
-    14: [(2, 21)],
-    15: [(2, 22)],
-    16: [(1, 23)],
-    17: [(1, 23)],
-    18: [(1, 24)],
-    19: [(1, 24)],
+    1: [(15, 27)],
+    2: [(14, 28)],
+    3: [(14, 28)],
+    4: [(13, 29)],
+    5: [(13, 29)],
+    6: [(12, 28)],
+    7: [(10, 28)],
+    8: [(8, 28)],
+    # The Humber bites the east coast. Wales steps out to the west.
+    9: [(6, 26)],
+    10: [(4, 23)],
+    11: [(3, 20)],
+    12: [(2, 22)],
+    13: [(1, 26)],
+    14: [(0, 30)],
+    15: [(0, 32)],
+    16: [(0, 34)],
+    17: [(0, 33)],
+    18: [(0, 32)],
+    19: [(1, 32)],
     # Cardigan Bay, a shallow bite in the Welsh west coast.
-    20: [(2, 23)],
-    21: [(3, 22)],
-    22: [(3, 21)],
-    # The Wash, east of Lincoln. East Anglia is the bulge south of it.
-    23: [(2, 20)],
-    24: [(1, 19)],
-    25: [(2, 22)],
-    26: [(2, 25)],
-    27: [(2, 28)],
-    28: [(2, 30)],
-    29: [(3, 29)],
+    20: [(2, 31)],
+    21: [(3, 31)],
+    22: [(2, 32)],
+    # The Wash, a deep square bite east of Lincoln.
+    23: [(1, 26)],
+    24: [(0, 23)],
+    25: [(0, 25)],
+    # East Anglia, the rounded bulge south of the Wash.
+    26: [(0, 32)],
+    27: [(0, 36)],
+    28: [(0, 40)],
+    29: [(1, 41)],
     # London. The Thames estuary cuts the east coast back.
-    30: [(4, 22)],
-    31: [(4, 18)],
-    32: [(3, 20)],
-    # Bristol Channel, open to the western sea around Pembrokeshire.
-    33: [(2, 9), (15, 26)],
-    34: [(3, 8), (12, 32)],
-    35: [(12, 35)],
-    36: [(8, 35)],
-    37: [(6, 35)],
-    # Sussex shore, with Cornwall and the Kent corner projecting south.
-    38: [(4, 10), (16, 24), (26, 35)],
-    39: [(3, 8), (12, 15), (30, 35)],
-    40: [(2, 6), (12, 15), (32, 35)],
-    41: [(1, 5), (33, 34)],
-    42: [(1, 4)],
-    43: [(1, 3)],
-    44: [(1, 2)],
-    45: [(1, 2)],
+    30: [(2, 36)],
+    # Bristol Channel, open to the western sea south of Pembrokeshire.
+    31: [(0, 14), (20, 34)],
+    32: [(0, 11), (18, 36)],
+    33: [(0, 8), (17, 38)],
+    34: [(16, 42)],
+    # Wide south coast. Cornwall leaves it toward the southwest.
+    35: [(12, 44)],
+    36: [(8, 45)],
+    37: [(5, 44)],
+    38: [(3, 42)],
+    # The arm itself, and Kent turning the southeast corner.
+    39: [(1, 6), (34, 44)],
+    40: [(0, 5), (10, 13), (36, 46)],
+    41: [(0, 4), (11, 14), (40, 46)],
+    42: [(0, 3), (43, 46)],
+    43: [(0, 2)],
+    44: [(0, 1)],
+    45: [(0, 0)],
     # y=46 is open water on the mask. Boulogne, impassable, is painted there
     # afterwards so the strait can narrow without moving the latitude line.
-    # Cotentin fist, wider at the knuckles, Seine bay, St-Valery headland.
-    47: [(20, 26)],
-    48: [(4, 16), (21, 28)],
-    49: [(4, 17), (22, 30)],
-    50: [(5, 16), (22, 30)],
-    51: [(6, 16), (21, 30)],
-    52: [(6, 15), (20, 30)],
-    53: [(7, 16), (20, 30)],
-    54: [(7, 17), (21, 30)],
-    55: [(7, 18), (22, 30)],
-    56: [(6, 30)],
-    57: [(6, 30)],
-    58: [(6, 29)],
-    59: [(6, 28)],
-    60: [(7, 28)],
-    61: [(8, 27)],
-    62: [(8, 27)],
+    # St-Valery headland, then the Cotentin fist with the Seine bay east of it.
+    47: [(22, 34)],
+    48: [(6, 17), (24, 36)],
+    49: [(6, 17), (23, 38)],
+    50: [(6, 18), (23, 40)],
+    51: [(6, 18), (22, 42)],
+    52: [(6, 18), (22, 42)],
+    53: [(7, 19), (22, 42)],
+    54: [(7, 19), (22, 42)],
+    55: [(7, 20), (22, 42)],
+    56: [(8, 44)],
+    57: [(8, 44)],
+    58: [(8, 43)],
+    59: [(8, 42)],
+    60: [(9, 41)],
+    61: [(9, 40)],
 }
 
 TOWNS = [
-    ("York", 16, 16, 15, "english"),
-    ("Durham", 14, 6, 4, "english"),
-    ("Lincoln", 16, 23, 6, "english"),
-    ("Nottingham", 12, 20, 5, "english"),
-    ("Norwich", 25, 28, 5, "english"),
-    ("Stamford", 18, 25, 4, "english"),
-    ("Oxford", 13, 31, 5, "english"),
-    ("London", 16, 30, 25, "english"),
-    ("Winchester", 14, 36, 15, "english"),
-    ("Canterbury", 24, 36, 8, "english"),
-    ("Dover", 35, 40, 8, "english"),
-    ("Hastings", 22, 38, 6, "english"),
-    ("Pevensey", 19, 38, 6, "english"),
-    ("Chichester", 16, 38, 4, "english"),
-    ("Exeter", 13, 36, 5, "english"),
-    ("Gloucester", 12, 32, 5, "english"),
-    ("Wallingford", 15, 30, 4, "english"),
-    ("Thetford", 21, 27, 3, "english"),
-    ("St-Valery", 22, 47, 4, "norman"),
-    ("Bayeux", 11, 55, 3, "norman"),
+    ("York", 22, 16, 15, "english"),
+    ("Durham", 18, 6, 4, "english"),
+    ("Lincoln", 22, 23, 6, "english"),
+    ("Nottingham", 16, 20, 5, "english"),
+    ("Norwich", 36, 28, 5, "english"),
+    ("Stamford", 24, 26, 4, "english"),
+    ("Oxford", 18, 29, 5, "english"),
+    ("London", 22, 30, 25, "english"),
+    ("Winchester", 18, 36, 15, "english"),
+    ("Canterbury", 36, 38, 8, "english"),
+    ("Dover", 46, 42, 8, "english"),
+    ("Hastings", 26, 38, 6, "english"),
+    ("Pevensey", 22, 38, 6, "english"),
+    ("Chichester", 18, 38, 4, "english"),
+    ("Exeter", 14, 36, 5, "english"),
+    ("Gloucester", 16, 28, 5, "english"),
+    ("Wallingford", 20, 30, 4, "english"),
+    ("Thetford", 30, 27, 3, "english"),
+    ("St-Valery", 26, 47, 4, "norman"),
+    ("Bayeux", 11, 54, 3, "norman"),
     ("Caen", 12, 57, 6, "norman"),
-    ("Rouen", 26, 57, 8, "norman"),
-    ("Dives", 15, 52, 3, "norman"),
+    ("Rouen", 32, 58, 8, "norman"),
+    ("Dives", 18, 52, 3, "norman"),
 ]
 
 REQUIRED_PORTS = {
@@ -171,7 +173,7 @@ REQUIRED_PORTS = {
     "Rouen",
 }
 
-SPINE_X = 16
+SPINE_X = 22
 SPINE_Y0, SPINE_Y1 = 16, 30
 
 
@@ -231,10 +233,10 @@ def apply_beaches(grid):
             if 36 <= y <= 45 and sea_s:
                 grid[y][x] = BEACH
             # Kent's corner, sea to the east as well as the south.
-            elif x >= 26 and 36 <= y <= 42 and (sea_s or sea_e):
+            elif x >= 34 and 38 <= y <= 43 and (sea_s or sea_e):
                 grid[y][x] = BEACH
             # Norman shore facing England, and the Cotentin fist.
-            elif y >= 47 and (sea_n or (x <= 18 and (sea_e or sea_w))):
+            elif y >= 47 and (sea_n or (x <= 20 and (sea_e or sea_w))):
                 grid[y][x] = BEACH
 
 
@@ -271,23 +273,23 @@ def build():
     fill_land(grid)
 
     # Inland only. The coastline is the mask.
-    stamp(grid, 16, 4, 2, 2, HILL)  # Cheviots
-    stamp(grid, 10, 15, 2, 4, HILL)  # Pennines, west of the Vale
-    stamp(grid, 6, 20, 2, 4, HILL)  # Welsh massif
-    stamp(grid, 14, 32, 2, 1, HILL)  # Cotswolds
-    stamp(grid, 11, 36, 2, 1, HILL)  # Dartmoor
-    stamp(grid, 20, 36, 3, 1, HILL)  # Downs
-    stamp(grid, 12, 54, 3, 2, HILL)  # Norman bocage
-    stamp(grid, 22, 36, 2, 1, FOREST)  # the Weald
+    stamp(grid, 20, 4, 2, 2, HILL)  # Cheviots
+    stamp(grid, 14, 14, 2, 4, HILL)  # Pennines, west of the Vale
+    stamp(grid, 6, 18, 3, 4, HILL)  # Welsh massif
+    stamp(grid, 24, 33, 2, 1, HILL)  # Cotswolds
+    stamp(grid, 16, 36, 2, 1, HILL)  # Dartmoor
+    stamp(grid, 28, 37, 3, 1, HILL)  # Downs
+    stamp(grid, 12, 58, 3, 2, HILL)  # Norman bocage
+    stamp(grid, 30, 37, 2, 1, FOREST)  # the Weald
     stamp(grid, 12, 37, 2, 1, FOREST)  # New Forest
-    stamp(grid, 13, 20, 2, 2, FOREST)  # Sherwood, west of Ermine Street
-    stamp(grid, 6, 18, 2, 2, FOREST)  # Welsh woods
-    stamp(grid, 24, 27, 2, 1, FOREST)  # East Anglia
-    stamp(grid, 24, 58, 2, 1, FOREST)  # Norman woods
-    stamp(grid, 20, 25, 2, 1, MARSH)  # the Fens
-    stamp(grid, 13, 35, 2, 1, MARSH)  # Somerset levels
-    stamp(grid, 22, 37, 2, 1, MARSH)  # Romney
-    stamp(grid, 20, 15, 1, 1, MARSH)  # Humber levels
+    stamp(grid, 18, 20, 2, 2, FOREST)  # Sherwood, west of Ermine Street
+    stamp(grid, 4, 16, 2, 2, FOREST)  # Welsh woods
+    stamp(grid, 34, 28, 2, 1, FOREST)  # East Anglia
+    stamp(grid, 28, 59, 2, 1, FOREST)  # Norman woods
+    stamp(grid, 24, 26, 2, 1, MARSH)  # the Fens
+    stamp(grid, 22, 34, 2, 1, MARSH)  # Somerset levels
+    stamp(grid, 32, 38, 2, 1, MARSH)  # Romney
+    stamp(grid, 26, 14, 1, 1, MARSH)  # Humber levels
 
     apply_beaches(grid)
 
@@ -300,17 +302,11 @@ def build():
             {"name": name, "x": x, "y": y, "value": value, "owner": owner, "port": False}
         )
 
-    # Rivers reach the sea and stay off the Ermine column except at the towns.
+    # The Severn is inland of the roads. The Thames and the Ouse are painted
+    # after the roads, with the Seine, so a road cannot seal the port.
     paint_line(
         grid,
-        [town_xy(towns, "London"), (20, 30), (22, 30)],
-        RIVER,
-        WALKABLE,
-    )
-    paint_line(grid, [town_xy(towns, "York"), (23, 16)], RIVER, WALKABLE)
-    paint_line(
-        grid,
-        [(8, 28), (10, 30), town_xy(towns, "Gloucester"), (12, 33)],
+        [(10, 22), (14, 26), town_xy(towns, "Gloucester"), (16, 30)],
         RIVER,
         WALKABLE,
     )
@@ -318,29 +314,36 @@ def build():
     roads = [
         ["London", "Lincoln", "York"],
         ["York", "Durham"],
-        ["Dover", (33, 38), (30, 37), "Canterbury", (20, 34), (18, 32), "London"],
+        ["Dover", (44, 40), (40, 39), "Canterbury", (30, 35), (26, 32), "London"],
         ["London", "Wallingford", "Oxford"],
         ["Oxford", "Gloucester"],
-        ["Exeter", (12, 36), "Winchester", (18, 36), (18, 32), "London"],
-        ["Chichester", "Pevensey", "Hastings", (24, 37), (26, 37), "Canterbury", (30, 38), (33, 39), "Dover"],
+        ["Exeter", "Winchester", (20, 33), (22, 31), "London"],
+        ["Chichester", "Pevensey", "Hastings", "Canterbury", (40, 39), (44, 41), "Dover"],
         ["Winchester", "Chichester"],
-        ["London", (18, 28), "Thetford", "Norwich"],
+        ["London", (24, 28), "Thetford", "Norwich"],
         ["Nottingham", "Lincoln"],
         ["Caen", "Bayeux"],
-        ["Dives", (12, 54), "Caen"],
-        ["Caen", "Rouen"],
-        ["Rouen", (28, 52), (24, 48), "St-Valery"],
-        ["Dives", (12, 56), (24, 56), (24, 48), "St-Valery"],
+        ["Dives", (14, 56), "Caen"],
+        ["Caen", (20, 59), "Rouen"],
+        ["Rouen", (36, 52), (32, 48), "St-Valery"],
+        ["Dives", (12, 57), (28, 60), (36, 54), (32, 48), "St-Valery"],
     ]
     for path in roads:
         coords = [town_xy(towns, p) if isinstance(p, str) else p for p in path]
         paint_road(grid, coords)
 
-    # The Seine is painted after the roads so the Caen–Rouen pavement cannot
-    # seal Rouen off from the bay.
+    # Rivers painted after the roads so pavement cannot seal a port.
+    # Thames estuary, the Ouse into the Humber, and the Seine into its bay.
     paint_line(
         grid,
-        [(27, 57), (27, 54), (21, 54)],
+        [(23, 30), (36, 30)],
+        RIVER,
+        WALKABLE,
+    )
+    paint_line(grid, [(23, 16), (26, 16), (26, 13)], RIVER, WALKABLE)
+    paint_line(
+        grid,
+        [(33, 58), (28, 56), (24, 55), (22, 55)],
         RIVER,
         WALKABLE,
     )
@@ -706,68 +709,61 @@ def outline_spans():
     Negative coordinates fall in the padding. Painting only replaces sea, so
     the playable coast, the Seine bay, and the open Channel stay as they are.
     """
-    # Scotland continues the Northumbrian shoulder (y=1 is x=12..22), widens
+    # Scotland continues the Northumbrian shoulder (y=1 is x=15..27), widens
     # slightly through the Highlands, then tapers to a northern cape.
     scotland = {
-        -15: [(18, 20)],
-        -14: [(17, 21)],
-        -13: [(16, 22)],
-        -12: [(15, 23)],
-        -11: [(14, 24)],
-        -10: [(13, 25)],
-        -9: [(12, 26)],
-        -8: [(12, 26)],
-        -7: [(11, 26)],
-        -6: [(11, 25)],
-        -5: [(11, 25)],
-        -4: [(11, 24)],
-        -3: [(11, 24)],
-        -2: [(11, 23)],
-        -1: [(11, 23)],
-        0: [(11, 23)],
+        -15: [(20, 23)],
+        -14: [(18, 25)],
+        -13: [(17, 26)],
+        -12: [(16, 27)],
+        -11: [(15, 28)],
+        -10: [(14, 29)],
+        -9: [(13, 30)],
+        -8: [(12, 30)],
+        -7: [(12, 29)],
+        -6: [(13, 29)],
+        -5: [(14, 28)],
+        -4: [(14, 28)],
+        -3: [(15, 28)],
+        -2: [(15, 28)],
+        -1: [(15, 28)],
+        0: [(15, 28)],
     }
 
-    # Brittany points west under the wide western Channel. The western rows
-    # are the narrow end; the base, further east, joins Maine. Sea stays
-    # south of the point. The Gulf of Saint-Malo stays open.
+    # Brittany points west under the wide western Channel. Northern rows stay
+    # west of Normandy so the Gulf of Saint-Malo stays open. The southern
+    # rows are the base and meet Maine. Sea stays south of the point.
     brittany = {
-        60: [(2, 6)],
-        61: [(-2, 6)],
-        62: [(-6, 7)],
-        63: [(-10, 7)],
-        64: [(-13, 6)],
-        65: [(-15, 5)],
-        66: [(-15, 6)],
-        67: [(-12, 7)],
-        68: [(-8, 8)],
-        69: [(-4, 8)],
+        59: [(-6, 2)],
+        60: [(-10, 3)],
+        61: [(-13, 4)],
+        62: [(-16, 4)],
+        63: [(-17, 5)],
+        64: [(-17, 6)],
+        65: [(-14, 8)],
+        66: [(-10, 14)],
+        67: [(-6, 16)],
+        68: [(-2, 16)],
     }
 
     # Interior France abuts Normandy on the south and Brittany at its base.
-    # It does not wrap the Cotentin or fill in the sea south of the Breton point.
+    # It does not wrap the Cotentin or fill the sea south of the Breton point.
     maine = {}
     for y in range(63, 70):
-        maine[y] = [(8, 36)]
+        maine[y] = [(16, 40 + EAST)]
     for y in range(70, H + SOUTH):
-        maine[y] = [(0, 36)]
+        maine[y] = [(4, 40 + EAST)]
 
     # Flanders and Boulogne. The headland comes north toward Dover; the rest
-    # continues the continental coast east of the Somme.
+    # continues the continental coast east of the Somme. It stays east of
+    # Hastings and of the Seine bay.
     flanders = {
-        44: [(30, 32 + EAST)],
-        45: [(28, 32 + EAST)],
-        46: [(26, 32 + EAST)],
-        47: [(27, 32 + EAST)],
-        48: [(29, 32 + EAST)],
-        49: [(31, 32 + EAST)],
-        52: [(31, 32 + EAST)],
-        56: [(31, 32 + EAST)],
-        60: [(30, 32 + EAST)],
+        44: [(48, 40 + EAST)],
+        45: [(34, 40 + EAST)],
+        46: [(32, 40 + EAST)],
     }
-    # Fill the eastern padding beside Flanders so the coast is a region.
-    for y in range(46, 63):
-        flanders.setdefault(y, [])
-        flanders[y] = list(flanders[y]) + [(34, 32 + EAST)]
+    for y in range(47, 63):
+        flanders[y] = [(42, 40 + EAST)]
     return scotland, brittany, maine, flanders
 
 
