@@ -380,14 +380,13 @@ export class GameView {
   drawTownLabels(ctx, vis) {
     ctx.font = "600 11px Palatino Linotype, Palatino, serif";
     ctx.textAlign = "center";
-    for (const t of this.game.towns) {
-      if (t.x < vis.x0 - 1 || t.x > vis.x1 + 1 || t.y < vis.y0 - 1 || t.y > vis.y1 + 1) continue;
-      const px = t.x * TILE + TILE / 2;
-      const py = t.y * TILE - 2;
+    ctx.textBaseline = "alphabetic";
+    for (const lab of layoutTownLabels(ctx, this.game.towns)) {
+      if (lab.tx < vis.x0 - 2 || lab.tx > vis.x1 + 2 || lab.ty < vis.y0 - 2 || lab.ty > vis.y1 + 2) continue;
       ctx.fillStyle = "rgba(20,12,6,0.7)";
-      ctx.fillText(t.name, px + 1, py + 1);
+      ctx.fillText(lab.name, lab.x + 1, lab.y + 1);
       ctx.fillStyle = PAL.cream;
-      ctx.fillText(t.name, px, py);
+      ctx.fillText(lab.name, lab.x, lab.y);
     }
   }
 
@@ -625,6 +624,54 @@ export class GameView {
       umeta.textContent = `${SIDE_LABEL[sel.side]} · ${TYPE_LABEL[sel.type]}${g.selectedId === sel.id ? " · HELD" : ""}${sel.broken ? " · BROKEN" : ""}${sel.embarkedOn ? " · embarked" : ""}`;
     }
   }
+}
+
+// Towns on the new coast sit on neighbouring tiles. Keep each name on its
+// own line: above the tile when that ink is free, otherwise just below it.
+function layoutTownLabels(ctx, towns) {
+  ctx.font = "600 11px Palatino Linotype, Palatino, serif";
+  const placed = [];
+  const ordered = towns.slice().sort((a, b) => a.y - b.y || a.x - b.x || a.name.localeCompare(b.name));
+  for (const t of ordered) {
+    const width = ctx.measureText(t.name).width;
+    const cx = t.x * TILE + TILE / 2;
+    const above = t.y * TILE - 2;
+    const below = t.y * TILE + TILE + 11;
+    const nudge = Math.ceil(width * 0.6);
+    const candidates = [
+      [cx, above],
+      [cx, below],
+      [cx, above - 14],
+      [cx, below + 14],
+      [cx - nudge, above],
+      [cx + nudge, above],
+      [cx - nudge, below],
+      [cx + nudge, below],
+    ];
+    let choice = null;
+    for (const [x, y] of candidates) {
+      const box = labelBox(x, y, width);
+      if (!placed.some((p) => boxesHit(p, box))) {
+        choice = { name: t.name, x, y, tx: t.x, ty: t.y, ...box };
+        break;
+      }
+    }
+    if (!choice) {
+      const box = labelBox(cx, above, width);
+      choice = { name: t.name, x: cx, y: above, tx: t.x, ty: t.y, ...box };
+    }
+    placed.push(choice);
+  }
+  return placed;
+}
+
+function labelBox(x, y, width) {
+  const pad = 2;
+  return { l: x - width / 2 - pad, r: x + width / 2 + pad, t: y - 12, b: y + 2 };
+}
+
+function boxesHit(a, b) {
+  return a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
 }
 
 function gmap(game) {
