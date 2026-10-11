@@ -61,6 +61,7 @@ export class GameView {
     this.t0 = performance.now();
     this.resolveAcc = 0;
     this.help = false;
+    this.showTerrain = false;
     this.dpr = 1;
     this.hover = null;
     this.running = true;
@@ -79,6 +80,7 @@ export class GameView {
       this.paintHud();
     });
     canvas.tabIndex = 0;
+    loadBoardImage(this.game.map);
     this.resize();
     canvas.focus();
     this.centerOnCursor(true);
@@ -164,6 +166,11 @@ export class GameView {
   onKey(e) {
     if (e.key === "?" || e.key === "h" || e.key === "H") {
       this.help = !this.help;
+      this.paintHud();
+      return;
+    }
+    if (e.key === "g" || e.key === "G") {
+      this.showTerrain = !this.showTerrain;
       this.paintHud();
       return;
     }
@@ -275,17 +282,12 @@ export class GameView {
     ctx.save();
     ctx.translate(-Math.round(this.cam.x), -Math.round(this.cam.y));
     const vis = this.screenTiles();
-    ctx.fillStyle = PAL.sea[0];
-    ctx.fillRect(0, 0, g.w * TILE, g.h * TILE);
-    for (let y = vis.y0; y <= vis.y1; y++) {
-      for (let x = vis.x0; x <= vis.x1; x++) {
-        this.drawTile(ctx, x, y);
-      }
-    }
-    blitCoast(ctx, coastOf(g.map), this.cam, this.vw, this.vh);
-    this.drawTownLabels(ctx, vis);
+    const board = boardImageOf(g.map);
+    if (board) this.paintBoard(ctx, g, vis, board);
+    else this.paintSquares(ctx, g, vis);
     this.drawOrders(ctx);
     this.drawUnits(ctx, vis);
+    this.drawTownLabels(ctx, vis);
     this.drawCursor(ctx);
     ctx.restore();
     this.drawMinimap(ctx);
@@ -296,18 +298,42 @@ export class GameView {
     drawTileAt(ctx, gmap(this.game), this.game.towns, x, y, this.time || 0);
   }
 
+  paintSquares(ctx, g, vis) {
+    ctx.fillStyle = PAL.sea[0];
+    ctx.fillRect(0, 0, g.w * TILE, g.h * TILE);
+    for (let y = vis.y0; y <= vis.y1; y++) {
+      for (let x = vis.x0; x <= vis.x1; x++) this.drawTile(ctx, x, y);
+    }
+    blitCoast(ctx, coastOf(g.map), this.cam, this.vw, this.vh);
+  }
+
+  // The relief is the board. Square fills stay hidden so the picture shows.
+  // G draws them back at half strength, with the smooth shore, when the
+  // movement colors are what you need. Out of play, beaches, roads, and the
+  // sea edge stay marked on the photograph itself.
+  paintBoard(ctx, g, vis, board) {
+    drawBoardImage(ctx, g.map, board);
+    if (this.showTerrain) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      for (let y = vis.y0; y <= vis.y1; y++) {
+        for (let x = vis.x0; x <= vis.x1; x++) this.drawTile(ctx, x, y);
+      }
+      ctx.restore();
+      blitCoast(ctx, coastOf(g.map), this.cam, this.vw, this.vh);
+      return;
+    }
+    blitCoast(ctx, playMarksOf(g.map), this.cam, this.vw, this.vh);
+    drawTownMarks(ctx, g.towns);
+  }
+
   drawTownLabels(ctx, vis) {
-    ctx.font = "600 11px Palatino Linotype, Palatino, serif";
+    ctx.font = LABEL_FONT;
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     for (const lab of layoutTownLabels(ctx, this.game.towns)) {
-      if (lab.tx < vis.x0 - 2 || lab.tx > vis.x1 + 2 || lab.ty < vis.y0 - 2 || lab.ty > vis.y1 + 2) continue;
-      ctx.lineWidth = 3;
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = "rgba(20,12,6,0.82)";
-      ctx.strokeText(lab.name, lab.x, lab.y);
-      ctx.fillStyle = PAL.cream;
-      ctx.fillText(lab.name, lab.x, lab.y);
+      if (lab.tx < vis.x0 - 3 || lab.tx > vis.x1 + 3 || lab.ty < vis.y0 - 3 || lab.ty > vis.y1 + 3) continue;
+      paintOneLabel(ctx, lab);
     }
   }
 
@@ -357,6 +383,9 @@ export class GameView {
       ctx.fillRect(px - 2, py - 2, 28, 24);
       u.flash = Math.max(0, u.flash - 0.08);
     }
+    ctx.fillStyle = "rgba(12, 8, 6, 0.45)";
+    roundRect(ctx, px + 1, py + 2, 26, 20, 2);
+    ctx.fill();
     ctx.fillStyle = pal.fill;
     roundRect(ctx, px, py, 26, 20, 2);
     ctx.fill();
@@ -401,18 +430,32 @@ export class GameView {
     const oy = this.vh - mh - 12;
     ctx.fillStyle = "rgba(12,8,6,0.72)";
     ctx.fillRect(ox - 4, oy - 4, mw + 8, mh + 8);
-    for (let y = 0; y < this.game.h; y++) {
-      for (let x = 0; x < this.game.w; x++) {
-        const t = terrainAt(gmap(this.game), x, y);
-        const names = ["sea", "beach", "clear", "forest", "hill", "marsh", "river", "road", "town", "out"];
-        ctx.fillStyle = PAL[names[t] || "clear"][0];
-        ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
-      }
-    }
-    const coast = coastOf(this.game.map);
-    if (coast.overlay) {
+    const board = boardImageOf(this.game.map);
+    if (board && !this.showTerrain) {
+      const b = this.game.map.board_image;
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(coast.overlay, ox, oy, mw, mh);
+      ctx.drawImage(board, b.left, b.top, b.right - b.left, b.bottom - b.top, ox, oy, mw, mh);
+      for (let y = 0; y < this.game.h; y++) {
+        for (let x = 0; x < this.game.w; x++) {
+          if (terrainAt(gmap(this.game), x, y) !== TERRAIN.OUT) continue;
+          ctx.fillStyle = "rgba(16, 12, 8, 0.55)";
+          ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
+        }
+      }
+    } else {
+      for (let y = 0; y < this.game.h; y++) {
+        for (let x = 0; x < this.game.w; x++) {
+          const t = terrainAt(gmap(this.game), x, y);
+          const names = ["sea", "beach", "clear", "forest", "hill", "marsh", "river", "road", "town", "out"];
+          ctx.fillStyle = PAL[names[t] || "clear"][0];
+          ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
+        }
+      }
+      const coast = coastOf(this.game.map);
+      if (coast.overlay) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(coast.overlay, ox, oy, mw, mh);
+      }
     }
     for (const u of living(this.game)) {
       const p = displayPos(this.game, u);
@@ -425,9 +468,9 @@ export class GameView {
 
   drawHelp(ctx) {
     ctx.fillStyle = "rgba(10,8,6,0.82)";
-    ctx.fillRect(this.vw / 2 - 250, 40, 500, 340);
+    ctx.fillRect(this.vw / 2 - 250, 40, 500, 370);
     ctx.strokeStyle = PAL.gold;
-    ctx.strokeRect(this.vw / 2 - 250, 40, 500, 340);
+    ctx.strokeRect(this.vw / 2 - 250, 40, 500, 370);
     ctx.fillStyle = PAL.cream;
     ctx.font = "16px Palatino Linotype, Palatino, serif";
     ctx.textAlign = "left";
@@ -438,6 +481,7 @@ export class GameView {
       "Click a unit, then click a destination, to plot a path",
       "Backspace  cancel last order    Space  clear orders",
       "N  next Norman unit             T  execute the week",
+      "G  terrain plate — movement colors over the relief",
       "Right-click  clear orders",
       "March to a fleet on the coast, then order into the sea to embark.",
       "Gale turns close the Channel. Land while Harold is in the north.",
@@ -486,6 +530,7 @@ export class GameView {
       <div class="btns">
         <button id="endturn" ${g.phase !== "orders" ? "disabled" : ""}>Execute week (T)</button>
         <button id="nextu">Next unit (N)</button>
+        <button id="terrain" class="ghost">${this.showTerrain ? "Relief map (G)" : "Terrain plate (G)"}</button>
       </div>
       <div class="pad">
         <button id="dirN" class="ghost">N</button>
@@ -504,6 +549,12 @@ export class GameView {
     const end = this.hud.querySelector("#endturn");
     const nxt = this.hud.querySelector("#nextu");
     if (end) end.onclick = () => this.startResolve();
+    const plate = this.hud.querySelector("#terrain");
+    if (plate)
+      plate.onclick = () => {
+        this.showTerrain = !this.showTerrain;
+        this.paintHud();
+      };
     if (nxt)
       nxt.onclick = () => {
         nextNorman(g);
@@ -552,11 +603,11 @@ export class GameView {
   }
 }
 
-// Names sit above their tile when that ink is free, otherwise below or to
-// the side. A minimum gap keeps neighbours such as London and Wallingford
-// from reading as one string.
+// Names prefer the space just above their own town. Neighbours a cell apart
+// (Canterbury/Dover, Pevensey/Hastings) shift sideways before they stack,
+// and a short leader keeps an offset name tied to its dot.
 const LABEL_FONT = "600 11px Palatino Linotype, Palatino, serif";
-const LABEL_GAP = 18;
+const LABEL_GAP = 5;
 
 export function layoutTownLabels(ctx, towns) {
   ctx.font = LABEL_FONT;
@@ -566,40 +617,52 @@ export function layoutTownLabels(ctx, towns) {
     const measured = ctx.measureText(t.name).width;
     const width = measured > 2 ? measured : t.name.length * 6.4;
     const cx = t.x * TILE + TILE / 2;
-    const above = t.y * TILE - 3;
-    const mid = t.y * TILE + 16;
-    const below = t.y * TILE + TILE + 12;
-    const step = Math.ceil(width * 0.55) + 6;
-    const ys = [above, below, above - 16, below + 16, mid];
-    const xs = [cx, cx - step, cx + step];
-    const candidates = [];
-    for (const y of ys) for (const x of xs) candidates.push([x, y]);
+    const tileTop = t.y * TILE;
+    const preferredY = tileTop - 2;
+    const step = Math.max(20, width * 0.55);
+    const sides = [0, -1, 1, -2, 2, -3, 3];
+    const dys = [-2, TILE + 11, -16, TILE + 26, 13, -32, TILE + 40, -46, TILE + 54];
     let choice = null;
-    for (const [x, y] of candidates) {
-      const box = labelBox(x, y, width);
-      if (!placed.some((p) => boxesHit(p, box, LABEL_GAP))) {
-        choice = { name: t.name, x, y, tx: t.x, ty: t.y, ...box };
-        break;
+    let best = Infinity;
+    for (const dy of dys) {
+      for (const side of sides) {
+        const x = cx + side * step;
+        const y = tileTop + dy;
+        const box = labelBox(x, y, width);
+        if (placed.some((p) => boxesHit(p, box, LABEL_GAP))) continue;
+        if (coversOtherTown(box, t, towns)) continue;
+        let score = Math.abs(side) * 1.15 + Math.abs(y - preferredY) * 0.09;
+        if (dy > 0) score += 0.35;
+        for (const p of placed) {
+          const overlap = Math.min(box.r, p.r) - Math.max(box.l, p.l);
+          const vert = box.b < p.t ? p.t - box.b : p.b < box.t ? box.t - p.b : 0;
+          if (overlap > 6 && vert < 36) score += 5;
+        }
+        if (score < best) {
+          best = score;
+          const leader = Math.hypot(x - cx, y - preferredY) > 14;
+          choice = { name: t.name, x, y, tx: t.x, ty: t.y, leader, ...box };
+        }
       }
     }
     if (!choice) {
-      for (let ring = 1; ring <= 10 && !choice; ring++) {
-        for (const y of [below + ring * 15, above - ring * 15]) {
-          for (const x of xs) {
+      for (let ring = 4; ring <= 16 && !choice; ring++) {
+        for (const y of [preferredY - ring * 12, tileTop + TILE + 11 + ring * 12]) {
+          for (const side of sides) {
+            const x = cx + side * step;
             const box = labelBox(x, y, width);
-            if (!placed.some((p) => boxesHit(p, box, LABEL_GAP))) {
-              choice = { name: t.name, x, y, tx: t.x, ty: t.y, ...box };
-              break;
-            }
+            if (placed.some((p) => boxesHit(p, box, LABEL_GAP))) continue;
+            choice = { name: t.name, x, y, tx: t.x, ty: t.y, leader: true, ...box };
+            break;
           }
           if (choice) break;
         }
       }
     }
     if (!choice) {
-      const y = below + 15 * (placed.length + 1);
+      const y = tileTop + TILE + 11 + (placed.length + 1) * 16;
       const box = labelBox(cx, y, width);
-      choice = { name: t.name, x: cx, y, tx: t.x, ty: t.y, ...box };
+      choice = { name: t.name, x: cx, y, tx: t.x, ty: t.y, leader: true, ...box };
     }
     placed.push(choice);
   }
@@ -607,12 +670,226 @@ export function layoutTownLabels(ctx, towns) {
 }
 
 function labelBox(x, y, width) {
-  const pad = 3;
-  return { l: x - width / 2 - pad, r: x + width / 2 + pad, t: y - 13, b: y + 3 };
+  const pad = 2;
+  return { l: x - width / 2 - pad, r: x + width / 2 + pad, t: y - 12, b: y + 2 };
+}
+
+function coversOtherTown(box, self, towns) {
+  for (const o of towns) {
+    if (o.x === self.x && o.y === self.y) continue;
+    const ox = o.x * TILE + TILE / 2;
+    const oy = o.y * TILE + TILE / 2;
+    if (ox > box.l + 4 && ox < box.r - 4 && oy > box.t + 2 && oy < box.b - 2) return true;
+  }
+  return false;
+}
+
+function paintOneLabel(ctx, lab) {
+  if (lab.leader) {
+    const tx = lab.tx * TILE + TILE / 2;
+    const ty = lab.ty * TILE + TILE / 2;
+    const x = Math.max(lab.l, Math.min(lab.r, tx));
+    const y = Math.max(lab.t, Math.min(lab.b, ty));
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(x, y);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(246, 238, 214, 0.92)";
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(28, 20, 12, 0.88)";
+    ctx.stroke();
+  }
+  ctx.lineWidth = 3;
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.strokeStyle = "rgba(246, 238, 214, 0.95)";
+  ctx.strokeText(lab.name, lab.x, lab.y);
+  ctx.fillStyle = "#1a120c";
+  ctx.fillText(lab.name, lab.x, lab.y);
 }
 
 function boxesHit(a, b, gap = 0) {
   return a.l - gap < b.r && a.r + gap > b.l && a.t - gap < b.b && a.b + gap > b.t;
+}
+
+// The photograph is aligned by board_image: its pixel rectangle
+// (left, top, right, bottom) stretches onto the whole grid. One cell is
+// (right-left)/w by (bottom-top)/h source pixels.
+let boardCache = { key: "", img: null, status: "idle" };
+
+export function loadBoardImage(map) {
+  ensureBoard(map);
+  return boardImageOf(map);
+}
+
+function ensureBoard(map) {
+  const spec = map && map.board_image;
+  if (!spec || !spec.path || !(spec.right > spec.left) || !(spec.bottom > spec.top)) return;
+  const key = spec.path + "@" + spec.left + "," + spec.top + "," + spec.right + "," + spec.bottom;
+  if (boardCache.key === key) return;
+  boardCache = { key, img: null, status: "loading" };
+  const img = new Image();
+  img.decoding = "async";
+  img.onload = () => {
+    if (boardCache.key !== key) return;
+    boardCache.img = img;
+    boardCache.status = "ready";
+  };
+  img.onerror = () => {
+    if (boardCache.key !== key) return;
+    boardCache.status = "error";
+  };
+  img.src = spec.path;
+}
+
+function boardImageOf(map) {
+  ensureBoard(map);
+  const img = boardCache.img;
+  if (!img || boardCache.status !== "ready" || !img.complete || img.naturalWidth < 1) return null;
+  return img;
+}
+
+function drawBoardImage(ctx, map, img) {
+  const b = map.board_image;
+  const prev = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = true;
+  if ("imageSmoothingQuality" in ctx) ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, b.left, b.top, b.right - b.left, b.bottom - b.top, 0, 0, map.w * TILE, map.h * TILE);
+  ctx.imageSmoothingEnabled = prev;
+}
+
+let playMemo = null;
+
+function playMarksOf(map) {
+  if (playMemo && playMemo.map === map) return playMemo;
+  playMemo = buildPlayMarks(map);
+  return playMemo;
+}
+
+function buildPlayMarks(map) {
+  const overlay = document.createElement("canvas");
+  overlay.width = map.w * TILE;
+  overlay.height = map.h * TILE;
+  const ctx = overlay.getContext("2d");
+  for (let y = 0; y < map.h; y++) {
+    for (let x = 0; x < map.w; x++) {
+      const t = terrainAt(map, x, y);
+      const px = x * TILE;
+      const py = y * TILE;
+      if (t === TERRAIN.OUT) {
+        ctx.fillStyle = "rgba(18, 14, 10, 0.52)";
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.strokeStyle = "rgba(10, 8, 6, 0.5)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = -TILE; i <= TILE; i += 8) {
+          ctx.moveTo(px + i, py);
+          ctx.lineTo(px + i + TILE, py + TILE);
+        }
+        ctx.stroke();
+      } else if (t === TERRAIN.BEACH) {
+        ctx.fillStyle = "rgba(186, 148, 72, 0.4)";
+        ctx.fillRect(px, py, TILE, TILE);
+      }
+      if (t !== TERRAIN.OUT) {
+        ctx.strokeStyle = t === TERRAIN.SEA ? "rgba(16, 40, 58, 0.2)" : "rgba(36, 28, 18, 0.3)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+      }
+    }
+  }
+  strokeLinks(ctx, map, roadLink, "rgba(42, 28, 14, 0.55)", 4);
+  strokeLinks(ctx, map, roadLink, "rgba(232, 210, 156, 0.85)", 2);
+  strokeLinks(ctx, map, riverLink, "rgba(27, 78, 122, 0.82)", 3);
+  strokeCellShore(ctx, map);
+  return { map, overlay };
+}
+
+function roadLink(t, nt) {
+  const roadish = (v) => v === TERRAIN.ROAD || v === TERRAIN.TOWN;
+  return roadish(t) && roadish(nt) && (t === TERRAIN.ROAD || nt === TERRAIN.ROAD);
+}
+
+function riverLink(t, nt) {
+  const river = t === TERRAIN.RIVER || nt === TERRAIN.RIVER;
+  if (!river) return false;
+  const wet = (v) => v === TERRAIN.RIVER || v === TERRAIN.SEA || v === TERRAIN.BEACH || v === TERRAIN.TOWN;
+  return wet(t) && wet(nt);
+}
+
+function strokeLinks(ctx, map, pred, color, width) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  for (let y = 0; y < map.h; y++) {
+    for (let x = 0; x < map.w; x++) {
+      const t = terrainAt(map, x, y);
+      const x0 = x * TILE + TILE / 2;
+      const y0 = y * TILE + TILE / 2;
+      if (x + 1 < map.w && pred(t, terrainAt(map, x + 1, y))) {
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x0 + TILE, y0);
+      }
+      if (y + 1 < map.h && pred(t, terrainAt(map, x, y + 1))) {
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x0, y0 + TILE);
+      }
+    }
+  }
+  ctx.stroke();
+}
+
+// Exact sea/land cell edges, so a move onto the shore matches the line.
+// The rounded shore from the square map comes back with the terrain plate.
+function strokeCellShore(ctx, map) {
+  ctx.beginPath();
+  ctx.lineJoin = "miter";
+  for (let y = 0; y < map.h; y++) {
+    for (let x = 0; x < map.w; x++) {
+      if (terrainAt(map, x, y) === TERRAIN.SEA) continue;
+      const px = x * TILE;
+      const py = y * TILE;
+      if (terrainAt(map, x, y - 1) === TERRAIN.SEA) {
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + TILE, py);
+      }
+      if (terrainAt(map, x, y + 1) === TERRAIN.SEA) {
+        ctx.moveTo(px, py + TILE);
+        ctx.lineTo(px + TILE, py + TILE);
+      }
+      if (terrainAt(map, x - 1, y) === TERRAIN.SEA) {
+        ctx.moveTo(px, py);
+        ctx.lineTo(px, py + TILE);
+      }
+      if (terrainAt(map, x + 1, y) === TERRAIN.SEA) {
+        ctx.moveTo(px + TILE, py);
+        ctx.lineTo(px + TILE, py + TILE);
+      }
+    }
+  }
+  ctx.strokeStyle = "rgba(248, 240, 220, 0.75)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(20, 14, 8, 0.82)";
+  ctx.lineWidth = 1.25;
+  ctx.stroke();
+}
+
+function drawTownMarks(ctx, towns) {
+  for (const t of towns) {
+    const cx = t.x * TILE + TILE / 2;
+    const cy = t.y * TILE + TILE / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = t.owner === "norman" ? "#8e1b28" : t.owner === "norse" ? "#243656" : "#1c1814";
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#e6c86a";
+    ctx.stroke();
+  }
 }
 
 // Smooth the sea/land edge already stored in the map. Gameplay stays on the
@@ -743,27 +1020,26 @@ function blitCoast(ctx, coast, cam, vw, vh) {
 // Full-map paint used by the campaign view and by the atlas screenshot.
 // Same shore geometry as the scrolling map, with no HUD crop.
 export function paintFullMap(ctx, map, towns) {
-  ctx.fillStyle = PAL.sea[0];
-  ctx.fillRect(0, 0, map.w * TILE, map.h * TILE);
-  for (let y = 0; y < map.h; y++) {
-    for (let x = 0; x < map.w; x++) drawTileAt(ctx, map, towns, x, y, 0);
+  const board = boardImageOf(map);
+  if (board) {
+    drawBoardImage(ctx, map, board);
+    const marks = playMarksOf(map);
+    ctx.drawImage(marks.overlay, 0, 0);
+    drawTownMarks(ctx, towns);
+  } else {
+    ctx.fillStyle = PAL.sea[0];
+    ctx.fillRect(0, 0, map.w * TILE, map.h * TILE);
+    for (let y = 0; y < map.h; y++) {
+      for (let x = 0; x < map.w; x++) drawTileAt(ctx, map, towns, x, y, 0);
+    }
+    const coast = coastOf(map);
+    ctx.drawImage(coast.overlay, 0, 0);
   }
-  const coast = coastOf(map);
-  ctx.drawImage(coast.overlay, 0, 0);
   ctx.font = LABEL_FONT;
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  const vis = { x0: -2, y0: -2, x1: map.w + 2, y1: map.h + 2 };
-  for (const lab of layoutTownLabels(ctx, towns)) {
-    if (lab.tx < vis.x0 || lab.tx > vis.x1 || lab.ty < vis.y0 || lab.ty > vis.y1) continue;
-    ctx.lineWidth = 3;
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "rgba(20,12,6,0.82)";
-    ctx.strokeText(lab.name, lab.x, lab.y);
-    ctx.fillStyle = PAL.cream;
-    ctx.fillText(lab.name, lab.x, lab.y);
-  }
-  return coast.loops;
+  for (const lab of layoutTownLabels(ctx, towns)) paintOneLabel(ctx, lab);
+  return coastOf(map).loops;
 }
 
 function drawTileAt(ctx, map, towns, x, y, time) {
