@@ -110,10 +110,10 @@ export function isNavalTerrain(map, x, y) {
   return t === TERRAIN.SEA || t === TERRAIN.BEACH || t === TERRAIN.RIVER || isPort(map, x, y);
 }
 
-// Playable England is y <= 46 on the operational mask. tools/gen_map.py
-// inserts 16 out-of-play rows of Scotland above that mask.
-// tools/gen_map.py checks this constant.
-export const ENGLAND_LAT = 62;
+// England is every row on or north of this one. Norman towns lie strictly
+// south of it. tools/gen_map.py checks this constant against the grid: it is
+// the row between the English towns and the Norman ports, in the Channel.
+export const ENGLAND_LAT = 33;
 
 export function englandLat(y) {
   return y <= ENGLAND_LAT;
