@@ -463,12 +463,14 @@ function fight(game, a, b) {
   strike(b, a, false);
   a.fought = true;
   b.fought = true;
-  if (b.combat < breakThreshold(b) && b.muster > 0) {
+  // Log the break once. A later blow in the same week used to write the
+  // line again while the unit was already broken.
+  if (!b.broken && b.combat < breakThreshold(b) && b.muster > 0) {
     b.broken = true;
     b.orders = [];
     log(game, `${b.name} breaks.`);
   }
-  if (a.combat < breakThreshold(a) && a.muster > 0) {
+  if (!a.broken && a.combat < breakThreshold(a) && a.muster > 0) {
     a.broken = true;
     a.orders = [];
     log(game, `${a.name} breaks.`);

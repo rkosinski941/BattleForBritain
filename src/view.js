@@ -42,13 +42,20 @@ const PAL = {
   cream: "#f0e2c0",
 };
 
+// Madder, weld, and woad stay apart in luminance, and each side has its own
+// outline: a square, a roundel, or a diamond.
 const SIDE_COL = {
-  norman: { fill: "#8e1b28", ink: "#f3d9a4", edge: "#e0c36a" },
-  english: { fill: "#234c34", ink: "#e7efd8", edge: "#cfe3b0" },
-  norse: { fill: "#243656", ink: "#e4ecf6", edge: "#9eb4d0" },
+  norman: { fill: "#b5462e", ink: "#f6efe0", edge: "#4a1c14" },
+  english: { fill: "#c9a640", ink: "#1a120c", edge: "#3d3414" },
+  norse: { fill: "#1a3a6b", ink: "#e7eef8", edge: "#d5e2f2" },
 };
 
-const TILE = 32;
+// Cell size is chosen in resize() so the board covers the pane beside the
+// sidebar. The Channel (around row 31) is what stays in frame when the
+// height or the width has to be cropped.
+let TILE = 32;
+const CHANNEL_X = 20;
+const CHANNEL_Y = 31;
 
 export class GameView {
   constructor(canvas, hud, game, onEnded) {
@@ -64,6 +71,7 @@ export class GameView {
     this.showTerrain = false;
     this.dpr = 1;
     this.hover = null;
+    this.viewW = 0;
     this.running = true;
     this.resize = this.resize.bind(this);
     this.loop = this.loop.bind(this);
@@ -83,7 +91,6 @@ export class GameView {
     loadBoardImage(this.game.map);
     this.resize();
     canvas.focus();
-    this.centerOnCursor(true);
     planAI(this.game);
     this.paintHud();
     requestAnimationFrame(this.loop);
@@ -99,6 +106,9 @@ export class GameView {
     const wrap = this.canvas.parentElement;
     const w = wrap.clientWidth;
     const h = wrap.clientHeight;
+    const hudW = this.hud ? this.hud.getBoundingClientRect().width : 0;
+    const viewW = Math.max(160, w - hudW);
+    const first = this.viewW === 0;
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
     this.canvas.width = Math.floor(w * this.dpr);
     this.canvas.height = Math.floor(h * this.dpr);
@@ -107,22 +117,59 @@ export class GameView {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.vw = w;
     this.vh = h;
+    this.viewW = viewW;
+    const next = Math.max(viewW / this.game.w, h / this.game.h);
+    if (Math.abs(next - TILE) > 0.05) {
+      TILE = next;
+      playMemo = null;
+      coastMemo = null;
+    }
+    const focus = first
+      ? openingCenter(h)
+      : { x: (this.cam.x + viewW / 2) / TILE, y: (this.cam.y + h / 2) / TILE };
+    this.centerOnCell(focus.x, focus.y, true);
   }
 
-  centerOnCursor(hard) {
-    const tx = this.game.cursor.x * TILE - this.vw / 2 + TILE / 2;
-    const ty = this.game.cursor.y * TILE - this.vh / 2 + TILE / 2;
-    const maxX = this.game.w * TILE - this.vw;
-    const maxY = this.game.h * TILE - this.vh;
-    const x = clamp(tx, 0, Math.max(0, maxX));
-    const y = clamp(ty, 0, Math.max(0, maxY));
+  centerOnCell(cx, cy, hard) {
+    const tx = cx * TILE - this.viewW / 2;
+    const ty = cy * TILE - this.vh / 2;
+    const maxX = Math.max(0, this.game.w * TILE - this.viewW);
+    const maxY = Math.max(0, this.game.h * TILE - this.vh);
+    const x = clamp(tx, 0, maxX);
+    const y = clamp(ty, 0, maxY);
     if (hard) {
       this.cam.x = x;
       this.cam.y = y;
     } else {
-      this.cam.x += (x - this.cam.x) * 0.12;
-      this.cam.y += (y - this.cam.y) * 0.12;
+      this.cam.x += (x - this.cam.x) * 0.18;
+      this.cam.y += (y - this.cam.y) * 0.18;
     }
+  }
+
+  centerOnCursor(hard) {
+    this.centerOnCell(this.game.cursor.x + 0.5, this.game.cursor.y + 0.5, hard);
+  }
+
+  // The opening frame stays on the Channel. The map pans only when the
+  // cursor walks to the edge of the pane, which is what the help promises.
+  keepInView() {
+    const m = TILE * 1.2;
+    const left = this.game.cursor.x * TILE - this.cam.x;
+    const top = this.game.cursor.y * TILE - this.cam.y;
+    const rightLimit = this.viewW - m - TILE;
+    const bottomLimit = this.vh - m - TILE;
+    let x = this.cam.x;
+    let y = this.cam.y;
+    if (left < m) x -= m - left;
+    else if (left > rightLimit) x += left - rightLimit;
+    if (top < m) y -= m - top;
+    else if (top > bottomLimit) y += top - bottomLimit;
+    const maxX = Math.max(0, this.game.w * TILE - this.viewW);
+    const maxY = Math.max(0, this.game.h * TILE - this.vh);
+    x = clamp(x, 0, maxX);
+    y = clamp(y, 0, maxY);
+    this.cam.x += (x - this.cam.x) * 0.22;
+    this.cam.y += (y - this.cam.y) * 0.22;
   }
 
   screenTiles() {
@@ -244,7 +291,7 @@ export class GameView {
     const dt = Math.min(0.05, (now - this.t0) / 1000);
     this.t0 = now;
     this.time = now / 1000;
-    this.centerOnCursor(false);
+    this.keepInView();
     if (this.game.phase === "resolve") {
       const finish = () => {
         applyUpkeep(this.game);
@@ -277,7 +324,7 @@ export class GameView {
   draw() {
     const ctx = this.ctx;
     const g = this.game;
-    ctx.fillStyle = PAL.oak;
+    ctx.fillStyle = "#e4d2b0";
     ctx.fillRect(0, 0, this.vw, this.vh);
     ctx.save();
     ctx.translate(-Math.round(this.cam.x), -Math.round(this.cam.y));
@@ -285,11 +332,14 @@ export class GameView {
     const board = boardImageOf(g.map);
     if (board) this.paintBoard(ctx, g, vis, board);
     else this.paintSquares(ctx, g, vis);
+    this.drawLocalGrid(ctx);
     this.drawOrders(ctx);
     this.drawUnits(ctx, vis);
     this.drawTownLabels(ctx, vis);
     this.drawCursor(ctx);
     ctx.restore();
+    this.drawNorthThreat(ctx);
+    this.drawGaleLabel(ctx);
     this.drawMinimap(ctx);
     if (this.help) this.drawHelp(ctx);
   }
@@ -304,6 +354,7 @@ export class GameView {
     for (let y = vis.y0; y <= vis.y1; y++) {
       for (let x = vis.x0; x <= vis.x1; x++) this.drawTile(ctx, x, y);
     }
+    this.tintGaleSea(ctx, g, vis);
     blitCoast(ctx, coastOf(g.map), this.cam, this.vw, this.vh);
   }
 
@@ -320,20 +371,52 @@ export class GameView {
         for (let x = vis.x0; x <= vis.x1; x++) this.drawTile(ctx, x, y);
       }
       ctx.restore();
+      this.tintGaleSea(ctx, g, vis);
       blitCoast(ctx, coastOf(g.map), this.cam, this.vw, this.vh);
       return;
     }
+    this.tintGaleSea(ctx, g, vis);
     blitCoast(ctx, playMarksOf(g.map), this.cam, this.vw, this.vh);
     drawTownMarks(ctx, g.towns);
   }
 
+  // A Channel gale reads on the water, not only in the weather line.
+  // Diagonal streaks and a Gale plate keep the dark water from looking like
+  // a hole beside the off-map cloth.
+  tintGaleSea(ctx, g, vis) {
+    if (!g.weather || g.weather.id !== "gale") return;
+    for (let y = vis.y0; y <= vis.y1; y++) {
+      for (let x = vis.x0; x <= vis.x1; x++) {
+        if (terrainAt(gmap(g), x, y) !== TERRAIN.SEA) continue;
+        const px = x * TILE;
+        const py = y * TILE;
+        ctx.fillStyle = "rgba(8, 22, 42, 0.55)";
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px, py, TILE, TILE);
+        ctx.clip();
+        ctx.strokeStyle = "rgba(214, 228, 236, 0.72)";
+        ctx.lineWidth = Math.max(1.5, TILE * 0.055);
+        ctx.beginPath();
+        const gap = Math.max(6, TILE * 0.42);
+        for (let i = -TILE; i < TILE * 2; i += gap) {
+          ctx.moveTo(px + i, py);
+          ctx.lineTo(px + i + TILE, py + TILE);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
   drawTownLabels(ctx, vis) {
-    ctx.font = LABEL_FONT;
+    ctx.font = labelFont();
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    for (const lab of layoutTownLabels(ctx, this.game.towns)) {
+    for (const lab of layoutTownLabels(ctx, this.game.towns, counterBoxes(this.game))) {
       if (lab.tx < vis.x0 - 3 || lab.tx > vis.x1 + 3 || lab.ty < vis.y0 - 3 || lab.ty > vis.y1 + 3) continue;
-      paintOneLabel(ctx, lab);
+      paintOneLabel(ctx, keepLabelOnScreen(lab, this.cam.y));
     }
   }
 
@@ -348,7 +431,7 @@ export class GameView {
         y: p.y * TILE + TILE / 2,
       }));
       ctx.strokeStyle = col;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = Math.max(2, TILE * 0.06);
       ctx.beginPath();
       ctx.moveTo(pts[0].x, pts[0].y);
       for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
@@ -363,52 +446,171 @@ export class GameView {
   }
 
   drawUnits(ctx, vis) {
-    const drawn = new Set();
+    const piles = new Map();
     for (const u of living(this.game)) {
+      if (u.embarkedOn) continue;
       const p = displayPos(this.game, u);
       if (p.x < vis.x0 || p.x > vis.x1 || p.y < vis.y0 || p.y > vis.y1) continue;
       const k = p.x + "," + p.y;
-      if (drawn.has(k) && u.embarkedOn) continue;
-      drawn.add(k);
-      this.drawCounter(ctx, u, p);
+      if (!piles.has(k)) piles.set(k, []);
+      piles.get(k).push(u);
+    }
+    for (const group of piles.values()) {
+      group.sort((a, b) => a.combat - b.combat);
+      const n = group.length;
+      group.forEach((u, i) => this.drawCounter(ctx, u, displayPos(this.game, u), stackShift(i, n)));
     }
   }
 
-  drawCounter(ctx, u, p) {
-    const px = p.x * TILE + 3;
-    const py = p.y * TILE + 5;
+  drawLocalGrid(ctx) {
+    const id = this.game.selectedId;
+    if (!id) return;
+    const u = unitById(this.game, id);
+    if (!u) return;
+    const p = displayPos(this.game, u);
+    const radius = 4;
+    ctx.save();
+    ctx.strokeStyle = "rgba(48, 32, 16, 0.55)";
+    ctx.lineWidth = Math.max(1, TILE * 0.025);
+    for (let y = p.y - radius; y <= p.y + radius; y++) {
+      for (let x = p.x - radius; x <= p.x + radius; x++) {
+        if (x < 0 || y < 0 || x >= this.game.w || y >= this.game.h) continue;
+        if (terrainAt(gmap(this.game), x, y) === TERRAIN.OUT) continue;
+        const fade = 1 - Math.max(Math.abs(x - p.x), Math.abs(y - p.y)) / (radius + 1);
+        ctx.globalAlpha = 0.25 + 0.55 * fade;
+        ctx.strokeRect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2);
+      }
+    }
+    ctx.restore();
+  }
+
+  drawCounter(ctx, u, p, shift = { dx: 0, dy: 0 }) {
+    const tile = TILE;
+    const w = tile * 0.88;
+    const h = tile * 0.8;
+    const px = p.x * tile + (tile - w) / 2 + shift.dx;
+    const py = p.y * tile + (tile - h) / 2 + shift.dy;
     const pal = SIDE_COL[u.side];
     if (u.flash > 0) {
       ctx.fillStyle = `rgba(255,220,180,${u.flash})`;
-      ctx.fillRect(px - 2, py - 2, 28, 24);
+      traceCounter(ctx, u.side, px - 2, py - 2, w + 4, h + 4);
+      ctx.fill();
       u.flash = Math.max(0, u.flash - 0.08);
     }
-    ctx.fillStyle = "rgba(12, 8, 6, 0.45)";
-    roundRect(ctx, px + 1, py + 2, 26, 20, 2);
+    ctx.fillStyle = "rgba(12, 8, 6, 0.4)";
+    traceCounter(ctx, u.side, px + 1, py + 2, w, h);
     ctx.fill();
     ctx.fillStyle = pal.fill;
-    roundRect(ctx, px, py, 26, 20, 2);
+    traceCounter(ctx, u.side, px, py, w, h);
     ctx.fill();
-    ctx.strokeStyle = u.id === this.game.selectedId ? "#fff4c2" : pal.edge;
-    ctx.lineWidth = u.id === this.game.selectedId ? 2 : 1;
-    ctx.stroke();
-    ctx.fillStyle = pal.ink;
-    ctx.font = "bold 9px Palatino Linotype, Palatino, serif";
-    ctx.textAlign = "left";
-    const mark = u.type === "fleet" ? "F" : u.type === "knights" ? "K" : u.type === "archers" ? "A" : u.type === "fyrd" ? "Y" : u.type === "housecarls" || u.type === "huscarls" ? "H" : "I";
-    ctx.fillText(mark, px + 3, py + 9);
-    ctx.font = "9px Palatino Linotype, Palatino, serif";
-    ctx.fillText(String(u.combat), px + 3, py + 18);
+    ctx.save();
+    traceCounter(ctx, u.side, px, py, w, h);
+    ctx.clip();
+    ctx.fillStyle = "rgba(255,255,255,0.07)";
+    ctx.fillRect(px, py + h * 0.16, w, h * 0.08);
+    ctx.fillRect(px, py + h * 0.74, w, h * 0.08);
+    ctx.restore();
+    const emblem = Math.min(h * 0.48, w * 0.38);
+    if (emblem >= 18) drawEmblem(ctx, u.side, px + w * 0.04, py + h * 0.06, emblem, pal.ink);
+    drawTypeIcon(ctx, u.type, px + w * 0.46, py + h * 0.08, w * 0.48, h * 0.4, pal.ink);
+    const fs = Math.max(16, Math.round(tile * 0.42));
+    const num = String(u.combat);
+    ctx.font = `700 ${fs}px Palatino Linotype, Palatino, serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const tw = ctx.measureText(num).width;
+    const nx = px + w * 0.5;
+    const ny = u.side === "norman" ? py + h - fs * 0.52 : py + h * 0.58;
+    ctx.fillStyle = "rgba(12, 8, 6, 0.72)";
+    roundRect(ctx, nx - tw / 2 - 3, ny - fs * 0.46, tw + 6, fs * 0.92, 3);
+    ctx.fill();
+    ctx.fillStyle = "#fff6df";
+    ctx.fillText(num, nx, ny);
+    traceCounter(ctx, u.side, px, py, w, h);
+    if (u.id === this.game.selectedId) {
+      ctx.strokeStyle = "#1a120c";
+      ctx.lineWidth = Math.max(5, tile * 0.11);
+      ctx.stroke();
+      ctx.strokeStyle = "#fffaf0";
+      ctx.lineWidth = Math.max(2, tile * 0.045);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = pal.edge;
+      ctx.lineWidth = Math.max(2.25, tile * 0.05);
+      ctx.stroke();
+    }
     if (u.broken) {
-      ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.fillRect(px, py, 26, 20);
+      ctx.save();
+      traceCounter(ctx, u.side, px, py, w, h);
+      ctx.clip();
+      ctx.strokeStyle = "rgba(20, 8, 6, 0.8)";
+      ctx.lineWidth = Math.max(2, tile * 0.045);
+      ctx.beginPath();
+      ctx.moveTo(px + 4, py + 4);
+      ctx.lineTo(px + w - 4, py + h - 4);
+      ctx.moveTo(px + w - 4, py + 4);
+      ctx.lineTo(px + 4, py + h - 4);
+      ctx.stroke();
+      ctx.restore();
     }
     const cargo = living(this.game).filter((c) => c.embarkedOn === u.id);
     if (cargo.length) {
       ctx.fillStyle = PAL.gold;
-      ctx.font = "bold 8px sans-serif";
-      ctx.fillText("+" + cargo.length, px + 14, py + 9);
+      ctx.font = `700 ${Math.max(10, Math.round(h * 0.28))}px Palatino Linotype, Palatino, serif`;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "top";
+      ctx.fillText("+" + cargo.length, px + w - 3, py + 2);
     }
+  }
+
+  // York stays in the opening frame when it fits. A short pane still names
+  // the army above the edge, so the northern threat is not a surprise.
+  drawNorthThreat(ctx) {
+    const york = this.game.towns.find((t) => t.name === "York");
+    if (!york) return;
+    const top = this.cam.y / TILE;
+    if (york.y >= top - 0.15) return;
+    const text = "Hardrada at York";
+    ctx.save();
+    ctx.font = "600 15px Palatino Linotype, Palatino, serif";
+    const tw = ctx.measureText(text).width;
+    const x = Math.max(12, (this.viewW - tw - 28) / 2);
+    const y = 8;
+    ctx.fillStyle = "rgba(22, 16, 12, 0.9)";
+    ctx.fillRect(x, y, tw + 28, 28);
+    ctx.strokeStyle = PAL.gold;
+    ctx.strokeRect(x + 0.5, y + 0.5, tw + 27, 27);
+    ctx.fillStyle = PAL.cream;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("↑  " + text, x + 8, y + 14);
+    ctx.restore();
+  }
+
+  drawGaleLabel(ctx) {
+    if (!this.game.weather || this.game.weather.id !== "gale") return;
+    const text = "Gale";
+    ctx.save();
+    ctx.font = "700 18px Palatino Linotype, Palatino, serif";
+    const tw = ctx.measureText(text).width;
+    const x = 16;
+    const y = 16;
+    ctx.fillStyle = "rgba(8, 22, 42, 0.9)";
+    ctx.fillRect(x, y, tw + 36, 32);
+    ctx.strokeStyle = "#f4ead4";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, tw + 34, 30);
+    ctx.strokeStyle = "rgba(214, 228, 236, 0.9)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 8, y + 22);
+    ctx.lineTo(x + 16, y + 10);
+    ctx.stroke();
+    ctx.fillStyle = "#f4ead4";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 22, y + 16);
+    ctx.restore();
   }
 
   drawCursor(ctx) {
@@ -438,7 +640,7 @@ export class GameView {
       for (let y = 0; y < this.game.h; y++) {
         for (let x = 0; x < this.game.w; x++) {
           if (terrainAt(gmap(this.game), x, y) !== TERRAIN.OUT) continue;
-          ctx.fillStyle = "rgba(16, 12, 8, 0.55)";
+          ctx.fillStyle = "rgba(214, 196, 166, 0.82)";
           ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
         }
       }
@@ -462,8 +664,21 @@ export class GameView {
       ctx.fillStyle = SIDE_COL[u.side].fill;
       ctx.fillRect(ox + p.x * scale, oy + p.y * scale, 2, 2);
     }
-    ctx.strokeStyle = PAL.gold;
-    ctx.strokeRect(ox + (this.cam.x / TILE) * scale, oy + (this.cam.y / TILE) * scale, (this.vw / TILE) * scale, (this.vh / TILE) * scale);
+    const vx = ox + (this.cam.x / TILE) * scale;
+    const vy = oy + (this.cam.y / TILE) * scale;
+    const boxW = (this.viewW / TILE) * scale;
+    const boxH = (this.vh / TILE) * scale;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(ox, oy, mw, mh);
+    ctx.clip();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#1a120c";
+    ctx.strokeRect(vx, vy, boxW, boxH);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#fffaf0";
+    ctx.strokeRect(vx + 1.5, vy + 1.5, Math.max(0, boxW - 3), Math.max(0, boxH - 3));
+    ctx.restore();
   }
 
   drawHelp(ctx) {
@@ -543,7 +758,7 @@ export class GameView {
       </div>
       ${unitBlock}
       <div class="tile">Tile ${g.cursor.x},${g.cursor.y} · ${info.terr}${info.town ? " · " + info.town.name + " (" + info.town.owner + ")" : ""}</div>
-      <ol class="log">${g.log.map((l) => `<li>${esc(l)}</li>`).join("")}</ol>
+      <ol class="log">${formatLogLines(g).map((l) => `<li>${esc(l)}</li>`).join("")}</ol>
       <p class="hint">? help · You are William. Take London, and Winchester or Harold's life, before Christmas.</p>
     `;
     const end = this.hud.querySelector("#endturn");
@@ -606,31 +821,127 @@ export class GameView {
 // Names prefer the space just above their own town. Neighbours a cell apart
 // (Canterbury/Dover, Pevensey/Hastings) shift sideways before they stack,
 // and a short leader keeps an offset name tied to its dot.
-const LABEL_FONT = "600 11px Palatino Linotype, Palatino, serif";
-const LABEL_GAP = 5;
+function labelFont() {
+  const px = Math.max(15, Math.round(TILE * 0.42));
+  return `600 ${px}px Palatino Linotype, Palatino, Georgia, serif`;
+}
 
-export function layoutTownLabels(ctx, towns) {
-  ctx.font = LABEL_FONT;
+function labelPx() {
+  return Math.max(15, Math.round(TILE * 0.42));
+}
+
+// York through the Norman ports. A short pane pins York to the top.
+function openingCenter(vh) {
+  const top = 14.4;
+  const bottom = 39.2;
+  const visible = Math.max(1, vh / TILE);
+  const y = visible >= bottom - top ? (top + bottom) / 2 : top + visible / 2;
+  return { x: CHANNEL_X, y };
+}
+
+function stackShift(i, n) {
+  if (n <= 1) return { dx: 0, dy: 0 };
+  const span = Math.min(TILE * 0.46, TILE * 0.18 * (n - 1));
+  const along = (i * span) / (n - 1) - span / 2;
+  return { dx: along, dy: -along * 0.7 };
+}
+
+function counterBoxes(game) {
+  const piles = new Map();
+  for (const u of living(game)) {
+    if (u.embarkedOn) continue;
+    const p = displayPos(game, u);
+    const key = p.x + "," + p.y;
+    if (!piles.has(key)) piles.set(key, []);
+    piles.get(key).push(p);
+  }
+  const boxes = [];
+  const pad = TILE * 0.08;
+  const w = TILE * 0.88;
+  const h = TILE * 0.8;
+  for (const group of piles.values()) {
+    const p = group[0];
+    const n = group.length;
+    let l = Infinity;
+    let r = -Infinity;
+    let t = Infinity;
+    let b = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const s = stackShift(i, n);
+      const px = p.x * TILE + (TILE - w) / 2 + s.dx;
+      const py = p.y * TILE + (TILE - h) / 2 + s.dy;
+      l = Math.min(l, px);
+      r = Math.max(r, px + w);
+      t = Math.min(t, py);
+      b = Math.max(b, py + h);
+    }
+    boxes.push({ l: l - pad, r: r + pad, t: t - pad, b: b + pad });
+  }
+  return boxes;
+}
+
+function keepLabelOnScreen(lab, camY) {
+  if (lab.t >= camY + 4) return lab;
+  const px = labelPx();
+  const width = Math.max(8, lab.r - lab.l - 4);
+  const x = (lab.tx + 1) * TILE + width / 2 + 8;
+  const y = lab.ty * TILE + TILE * 0.78;
+  return { ...lab, x, y, leader: true, ...labelBox(x, y, width, px) };
+}
+
+function traceCounter(ctx, side, x, y, w, h) {
+  if (side === "english") {
+    roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.5);
+    return;
+  }
+  ctx.beginPath();
+  if (side === "norse") {
+    ctx.moveTo(x + w / 2, y);
+    ctx.lineTo(x + w, y + h / 2);
+    ctx.lineTo(x + w / 2, y + h);
+    ctx.lineTo(x, y + h / 2);
+    ctx.closePath();
+    return;
+  }
+  ctx.rect(x, y, w, h);
+}
+
+function hitsCounter(box, obstacles) {
+  const gap = Math.max(3, TILE * 0.06);
+  return obstacles.some((o) => boxesHit(o, box, gap));
+}
+
+export function layoutTownLabels(ctx, towns, obstacles = []) {
+  const px = labelPx();
+  const gap = Math.max(4, Math.round(TILE * 0.1));
+  ctx.font = labelFont();
   const placed = [];
   const ordered = towns.slice().sort((a, b) => a.y - b.y || a.x - b.x || a.name.localeCompare(b.name));
   for (const t of ordered) {
     const measured = ctx.measureText(t.name).width;
-    const width = measured > 2 ? measured : t.name.length * 6.4;
+    const width = measured > 2 ? measured : t.name.length * px * 0.55;
     const cx = t.x * TILE + TILE / 2;
     const tileTop = t.y * TILE;
-    const preferredY = tileTop - 2;
-    const step = Math.max(20, width * 0.55);
+    const onStack = hitsCounter(
+      { l: t.x * TILE, r: (t.x + 1) * TILE, t: tileTop, b: tileTop + TILE },
+      obstacles,
+    );
+    const preferredY = tileTop - (onStack ? px * 1.15 : 4);
+    const step = Math.max(px, width * 0.55);
     const sides = [0, -1, 1, -2, 2, -3, 3];
-    const dys = [-2, TILE + 11, -16, TILE + 26, 13, -32, TILE + 40, -46, TILE + 54];
+    const dys = onStack
+      ? [-px * 1.2, -px * 1.9, TILE + px * 1.45, -px * 0.45, TILE + px * 2.2, px * 0.2]
+      : [-4, TILE + px * 0.3, -px, TILE + px * 1.3, px * 0.4, -px * 1.8, TILE + px * 2.2];
     let choice = null;
     let best = Infinity;
     for (const dy of dys) {
       for (const side of sides) {
         const x = cx + side * step;
         const y = tileTop + dy;
-        const box = labelBox(x, y, width);
-        if (placed.some((p) => boxesHit(p, box, LABEL_GAP))) continue;
+        const box = labelBox(x, y, width, px);
+        if (placed.some((p) => boxesHit(p, box, gap))) continue;
         if (coversOtherTown(box, t, towns)) continue;
+        if (hitsCounter(box, obstacles)) continue;
         let score = Math.abs(side) * 1.15 + Math.abs(y - preferredY) * 0.09;
         if (dy > 0) score += 0.35;
         for (const p of placed) {
@@ -640,7 +951,7 @@ export function layoutTownLabels(ctx, towns) {
         }
         if (score < best) {
           best = score;
-          const leader = Math.hypot(x - cx, y - preferredY) > 14;
+          const leader = Math.hypot(x - cx, y - preferredY) > px;
           choice = { name: t.name, x, y, tx: t.x, ty: t.y, leader, ...box };
         }
       }
@@ -650,8 +961,9 @@ export function layoutTownLabels(ctx, towns) {
         for (const y of [preferredY - ring * 12, tileTop + TILE + 11 + ring * 12]) {
           for (const side of sides) {
             const x = cx + side * step;
-            const box = labelBox(x, y, width);
-            if (placed.some((p) => boxesHit(p, box, LABEL_GAP))) continue;
+            const box = labelBox(x, y, width, px);
+            if (placed.some((p) => boxesHit(p, box, gap))) continue;
+            if (hitsCounter(box, obstacles)) continue;
             choice = { name: t.name, x, y, tx: t.x, ty: t.y, leader: true, ...box };
             break;
           }
@@ -661,7 +973,7 @@ export function layoutTownLabels(ctx, towns) {
     }
     if (!choice) {
       const y = tileTop + TILE + 11 + (placed.length + 1) * 16;
-      const box = labelBox(cx, y, width);
+      const box = labelBox(cx, y, width, px);
       choice = { name: t.name, x: cx, y, tx: t.x, ty: t.y, leader: true, ...box };
     }
     placed.push(choice);
@@ -669,9 +981,9 @@ export function layoutTownLabels(ctx, towns) {
   return placed;
 }
 
-function labelBox(x, y, width) {
+function labelBox(x, y, width, px) {
   const pad = 2;
-  return { l: x - width / 2 - pad, r: x + width / 2 + pad, t: y - 12, b: y + 2 };
+  return { l: x - width / 2 - pad, r: x + width / 2 + pad, t: y - px - 1, b: y + 3 };
 }
 
 function coversOtherTown(box, self, towns) {
@@ -700,7 +1012,7 @@ function paintOneLabel(ctx, lab) {
     ctx.strokeStyle = "rgba(28, 20, 12, 0.88)";
     ctx.stroke();
   }
-  ctx.lineWidth = 3;
+  ctx.lineWidth = Math.max(3, labelPx() * 0.16);
   ctx.lineJoin = "round";
   ctx.miterLimit = 2;
   ctx.strokeStyle = "rgba(246, 238, 214, 0.95)";
@@ -778,24 +1090,10 @@ function buildPlayMarks(map) {
       const px = x * TILE;
       const py = y * TILE;
       if (t === TERRAIN.OUT) {
-        ctx.fillStyle = "rgba(18, 14, 10, 0.52)";
-        ctx.fillRect(px, py, TILE, TILE);
-        ctx.strokeStyle = "rgba(10, 8, 6, 0.5)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (let i = -TILE; i <= TILE; i += 8) {
-          ctx.moveTo(px + i, py);
-          ctx.lineTo(px + i + TILE, py + TILE);
-        }
-        ctx.stroke();
+        paintVellum(ctx, px, py, TILE);
       } else if (t === TERRAIN.BEACH) {
         ctx.fillStyle = "rgba(186, 148, 72, 0.4)";
         ctx.fillRect(px, py, TILE, TILE);
-      }
-      if (t !== TERRAIN.OUT) {
-        ctx.strokeStyle = t === TERRAIN.SEA ? "rgba(16, 40, 58, 0.2)" : "rgba(36, 28, 18, 0.3)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
       }
     }
   }
@@ -883,7 +1181,7 @@ function drawTownMarks(ctx, towns) {
     const cx = t.x * TILE + TILE / 2;
     const cy = t.y * TILE + TILE / 2;
     ctx.beginPath();
-    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.arc(cx, cy, Math.max(4, TILE * 0.14), 0, Math.PI * 2);
     ctx.fillStyle = t.owner === "norman" ? "#8e1b28" : t.owner === "norse" ? "#243656" : "#1c1814";
     ctx.fill();
     ctx.lineWidth = 1.5;
@@ -1035,7 +1333,7 @@ export function paintFullMap(ctx, map, towns) {
     const coast = coastOf(map);
     ctx.drawImage(coast.overlay, 0, 0);
   }
-  ctx.font = LABEL_FONT;
+  ctx.font = labelFont();
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   for (const lab of layoutTownLabels(ctx, towns)) paintOneLabel(ctx, lab);
@@ -1110,13 +1408,7 @@ function drawTileAt(ctx, map, towns, x, y, time) {
     ctx.fill();
   }
   if (t === TERRAIN.OUT) {
-    ctx.strokeStyle = "rgba(48,40,32,0.55)";
-    ctx.beginPath();
-    for (let i = -TILE; i <= TILE; i += 8) {
-      ctx.moveTo(px + i, py);
-      ctx.lineTo(px + i + TILE, py + TILE);
-    }
-    ctx.stroke();
+    paintVellum(ctx, px, py, TILE);
   }
   if (t === TERRAIN.SEA) {
     ctx.strokeStyle = "rgba(180,220,255,0.12)";
@@ -1125,10 +1417,6 @@ function drawTileAt(ctx, map, towns, x, y, time) {
     ctx.moveTo(px, py + oy);
     ctx.quadraticCurveTo(px + 16, py + oy - 3, px + 32, py + oy);
     ctx.stroke();
-  } else if (!touchesSea(map, x, y)) {
-    ctx.strokeStyle = PAL.grid;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(px + 0.5, py + 0.5, TILE, TILE);
   }
 }
 
@@ -1249,6 +1537,168 @@ function simplifyColinear(pts) {
 
 function gmap(game) {
   return game.map;
+}
+
+function formatLogLines(game) {
+  const out = [];
+  for (const line of game.log) {
+    if (out.length && out[out.length - 1] === line) continue;
+    out.push(line);
+  }
+  return out;
+}
+
+function paintVellum(ctx, px, py, size) {
+  ctx.fillStyle = "rgba(232, 216, 186, 0.86)";
+  ctx.fillRect(px, py, size, size);
+  ctx.strokeStyle = "rgba(128, 96, 58, 0.16)";
+  ctx.lineWidth = 1;
+  const step = Math.max(5, size / 5.5);
+  ctx.beginPath();
+  for (let i = step * 0.5; i < size; i += step) {
+    ctx.moveTo(px, py + i);
+    ctx.lineTo(px + size, py + i);
+    ctx.moveTo(px + i, py);
+    ctx.lineTo(px + i, py + size);
+  }
+  ctx.stroke();
+}
+
+// Side charges are drawn, not borrowed. Cross, dragon, raven.
+function drawEmblem(ctx, side, x, y, size, ink) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = ink;
+  ctx.strokeStyle = ink;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(1.25, size * 0.08);
+  if (side === "norman") {
+    const t = size * 0.2;
+    ctx.fillRect(size / 2 - t / 2, size * 0.08, t, size * 0.84);
+    ctx.fillRect(size * 0.1, size * 0.38, size * 0.8, t);
+  } else if (side === "english") {
+    ctx.beginPath();
+    ctx.moveTo(size * 0.18, size * 0.72);
+    ctx.quadraticCurveTo(size * 0.08, size * 0.28, size * 0.42, size * 0.4);
+    ctx.quadraticCurveTo(size * 0.78, size * 0.52, size * 0.7, size * 0.22);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(size * 0.74, size * 0.2, size * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(size * 0.4, size * 0.42);
+    ctx.lineTo(size * 0.62, size * 0.12);
+    ctx.lineTo(size * 0.48, size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.ellipse(size * 0.42, size * 0.58, size * 0.22, size * 0.16, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(size * 0.58, size * 0.5);
+    ctx.lineTo(size * 0.9, size * 0.4);
+    ctx.lineTo(size * 0.58, size * 0.64);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(size * 0.36, size * 0.5);
+    ctx.quadraticCurveTo(size * 0.12, size * 0.12, size * 0.58, size * 0.36);
+    ctx.quadraticCurveTo(size * 0.3, size * 0.4, size * 0.32, size * 0.58);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawTypeIcon(ctx, type, x, y, w, h, ink) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = ink;
+  ctx.fillStyle = ink;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(1.4, h * 0.09);
+  if (type === "knights") {
+    ctx.beginPath();
+    ctx.ellipse(w * 0.46, h * 0.62, w * 0.26, h * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.66, h * 0.5);
+    ctx.quadraticCurveTo(w * 0.92, h * 0.18, w * 0.78, h * 0.1);
+    ctx.quadraticCurveTo(w * 0.68, h * 0.28, w * 0.58, h * 0.42);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.3, h * 0.74);
+    ctx.lineTo(w * 0.26, h * 0.98);
+    ctx.moveTo(w * 0.42, h * 0.76);
+    ctx.lineTo(w * 0.44, h * 0.98);
+    ctx.moveTo(w * 0.58, h * 0.74);
+    ctx.lineTo(w * 0.64, h * 0.98);
+    ctx.moveTo(w * 0.7, h * 0.68);
+    ctx.lineTo(w * 0.8, h * 0.98);
+    ctx.stroke();
+  } else if (type === "archers") {
+    ctx.beginPath();
+    ctx.moveTo(w * 0.42, h * 0.08);
+    ctx.quadraticCurveTo(w * 0.95, h * 0.5, w * 0.42, h * 0.92);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.42, h * 0.08);
+    ctx.lineTo(w * 0.42, h * 0.92);
+    ctx.stroke();
+  } else if (type === "fleet") {
+    ctx.beginPath();
+    ctx.moveTo(w * 0.08, h * 0.58);
+    ctx.quadraticCurveTo(w * 0.5, h * 0.98, w * 0.92, h * 0.58);
+    ctx.lineTo(w * 0.78, h * 0.58);
+    ctx.quadraticCurveTo(w * 0.5, h * 0.78, w * 0.22, h * 0.58);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.5, h * 0.58);
+    ctx.lineTo(w * 0.5, h * 0.08);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.5, h * 0.14);
+    ctx.lineTo(w * 0.82, h * 0.42);
+    ctx.lineTo(w * 0.5, h * 0.42);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === "housecarls" || type === "huscarls") {
+    ctx.beginPath();
+    ctx.moveTo(w * 0.38, h * 0.08);
+    ctx.lineTo(w * 0.38, h * 0.96);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.38, h * 0.16);
+    ctx.quadraticCurveTo(w * 0.95, h * 0.08, w * 0.82, h * 0.46);
+    ctx.quadraticCurveTo(w * 0.62, h * 0.36, w * 0.38, h * 0.46);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === "fyrd") {
+    ctx.beginPath();
+    ctx.arc(w * 0.34, h * 0.58, Math.min(w, h) * 0.26, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.62, h * 0.08);
+    ctx.lineTo(w * 0.62, h * 0.96);
+    ctx.moveTo(w * 0.62, h * 0.08);
+    ctx.lineTo(w * 0.46, h * 0.26);
+    ctx.moveTo(w * 0.62, h * 0.08);
+    ctx.lineTo(w * 0.78, h * 0.26);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(w * 0.5, h * 0.06);
+    ctx.lineTo(w * 0.5, h * 0.96);
+    ctx.moveTo(w * 0.5, h * 0.06);
+    ctx.lineTo(w * 0.3, h * 0.28);
+    ctx.moveTo(w * 0.5, h * 0.06);
+    ctx.lineTo(w * 0.7, h * 0.28);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function clamp(v, a, b) {
