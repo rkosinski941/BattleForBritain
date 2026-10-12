@@ -38,6 +38,38 @@ select {
   justify-content: center;
 }
 
+#title {
+  position: relative;
+  overflow: hidden;
+}
+
+.comet {
+  position: absolute;
+  top: 22px;
+  right: 28px;
+  width: min(460px, 42vw);
+  margin: 0;
+  pointer-events: none;
+  z-index: 2;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
+}
+
+.comet svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.comet figcaption {
+  margin: 6px 4px 0 0;
+  text-align: right;
+  font-size: 13px;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  color: #f4ead4;
+  text-shadow: 0 1px 0 #1a120c, 0 2px 8px rgba(0, 0, 0, 0.85);
+}
+
 .screen.dim {
   background-color: #120e0a;
 }

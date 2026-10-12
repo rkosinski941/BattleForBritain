@@ -337,6 +337,7 @@ export class GameView {
     this.drawCursor(ctx);
     ctx.restore();
     this.drawNorthThreat(ctx);
+    this.drawMeteors(ctx);
     this.drawMinimap(ctx);
     if (this.help) this.drawHelp(ctx);
   }
@@ -622,6 +623,57 @@ export class GameView {
     const y = this.game.cursor.y * TILE + 1;
     ctx.strokeRect(x, y, TILE - 2, TILE - 2);
     ctx.globalAlpha = 1;
+  }
+
+  // Orionids, the week of 20–21 October: a few stitches of Halley's debris.
+  drawMeteors(ctx) {
+    if (this.game.phase !== "resolve" || !orionidWeek(this.game)) return;
+    const tick = this.game.tick;
+    const shots = [
+      { from: 2, to: 7, x0: 0.1, y0: 0.14, x1: 0.36, y1: 0.46 },
+      { from: 10, to: 15, x0: 0.58, y0: 0.08, x1: 0.88, y1: 0.36 },
+      { from: 18, to: 23, x0: 0.18, y0: 0.06, x1: 0.46, y1: 0.34 },
+      { from: 26, to: 31, x0: 0.42, y0: 0.18, x1: 0.74, y1: 0.52 },
+    ];
+    const w = this.viewW;
+    const h = this.vh;
+    for (const s of shots) {
+      if (tick < s.from || tick > s.to) continue;
+      const u = (tick - s.from) / Math.max(1, s.to - s.from);
+      const head = u;
+      const tail = Math.max(0, u - 0.45);
+      const x1 = (s.x0 + (s.x1 - s.x0) * head) * w;
+      const y1 = (s.y0 + (s.y1 - s.y0) * head) * h;
+      const x0 = (s.x0 + (s.x1 - s.x0) * tail) * w;
+      const y0 = (s.y0 + (s.y1 - s.y0) * tail) * h;
+      const fade = u < 0.2 ? u / 0.2 : u > 0.72 ? (1 - u) / 0.28 : 1;
+      ctx.save();
+      ctx.globalAlpha = 0.92 * fade;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "rgba(20, 14, 8, 0.9)";
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(246, 241, 228, 0.96)";
+      ctx.lineWidth = 4.5;
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(142, 27, 40, 0.95)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#f7f3e8";
+      ctx.beginPath();
+      ctx.arc(x1, y1, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#24180f";
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   drawMinimap(ctx) {
@@ -1510,12 +1562,15 @@ const WEATHER_CHRONICLE = {
 function formatLogLines(game) {
   const raw = game.log;
   const out = [];
+  let sawOrionids = false;
   for (let i = 0; i < raw.length; i++) {
     const line = raw[i];
     const self = line.match(DATE_RE);
     let text;
     if (self) {
-      text = chronicleDate(`${self[1]} ${self[2]}`, self[4]);
+      const week = `${self[1]} ${self[2]}`;
+      if (week === "20 October") sawOrionids = true;
+      text = chronicleDate(week, self[4]);
     } else {
       let week = "";
       for (let j = i + 1; j < raw.length; j++) {
@@ -1530,7 +1585,24 @@ function formatLogLines(game) {
     if (out.length && out[out.length - 1] === text) continue;
     out.push(text);
   }
+  if (sawOrionids && starsFell(game)) {
+    const star = "In the week of 20 October, stars fell over England.";
+    if (!out.includes(star)) out.unshift(star);
+  }
   return out;
+}
+
+// The campaign week that contains 20–21 October, the Orionid shower.
+function orionidWeek(game) {
+  const d = dateOf(game);
+  return d.year === 1066 && d.month === 10 && d.day === 20;
+}
+
+function starsFell(game) {
+  const d = dateOf(game);
+  if (d.year !== 1066) return d.year > 1066;
+  if (d.month > 10 || (d.month === 10 && d.day > 20)) return true;
+  return orionidWeek(game) && game.phase !== "orders";
 }
 
 function chronicleDate(week, rest) {
