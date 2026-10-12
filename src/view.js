@@ -42,10 +42,12 @@ const PAL = {
   cream: "#f0e2c0",
 };
 
+// Madder, weld, and woad stay apart in luminance, and each side has its own
+// outline: a square, a roundel, or a diamond.
 const SIDE_COL = {
-  norman: { fill: "#8e1b28", ink: "#f3d9a4", edge: "#e0c36a" },
-  english: { fill: "#234c34", ink: "#e7efd8", edge: "#cfe3b0" },
-  norse: { fill: "#243656", ink: "#e4ecf6", edge: "#9eb4d0" },
+  norman: { fill: "#b5462e", ink: "#f6efe0", edge: "#4a1c14" },
+  english: { fill: "#c9a640", ink: "#1a120c", edge: "#3d3414" },
+  norse: { fill: "#1a3a6b", ink: "#e7eef8", edge: "#d5e2f2" },
 };
 
 // Cell size is chosen in resize() so the board covers the pane beside the
@@ -337,6 +339,7 @@ export class GameView {
     this.drawCursor(ctx);
     ctx.restore();
     this.drawNorthThreat(ctx);
+    this.drawGaleLabel(ctx);
     this.drawMinimap(ctx);
     if (this.help) this.drawHelp(ctx);
   }
@@ -378,13 +381,31 @@ export class GameView {
   }
 
   // A Channel gale reads on the water, not only in the weather line.
+  // Diagonal streaks and a Gale plate keep the dark water from looking like
+  // a hole beside the off-map cloth.
   tintGaleSea(ctx, g, vis) {
     if (!g.weather || g.weather.id !== "gale") return;
-    ctx.fillStyle = "rgba(8, 22, 42, 0.5)";
     for (let y = vis.y0; y <= vis.y1; y++) {
       for (let x = vis.x0; x <= vis.x1; x++) {
         if (terrainAt(gmap(g), x, y) !== TERRAIN.SEA) continue;
-        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+        const px = x * TILE;
+        const py = y * TILE;
+        ctx.fillStyle = "rgba(8, 22, 42, 0.55)";
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px, py, TILE, TILE);
+        ctx.clip();
+        ctx.strokeStyle = "rgba(214, 228, 236, 0.72)";
+        ctx.lineWidth = Math.max(1.5, TILE * 0.055);
+        ctx.beginPath();
+        const gap = Math.max(6, TILE * 0.42);
+        for (let i = -TILE; i < TILE * 2; i += gap) {
+          ctx.moveTo(px + i, py);
+          ctx.lineTo(px + i + TILE, py + TILE);
+        }
+        ctx.stroke();
+        ctx.restore();
       }
     }
   }
@@ -395,7 +416,7 @@ export class GameView {
     ctx.textBaseline = "alphabetic";
     for (const lab of layoutTownLabels(ctx, this.game.towns, counterBoxes(this.game))) {
       if (lab.tx < vis.x0 - 3 || lab.tx > vis.x1 + 3 || lab.ty < vis.y0 - 3 || lab.ty > vis.y1 + 3) continue;
-      paintOneLabel(ctx, lab);
+      paintOneLabel(ctx, keepLabelOnScreen(lab, this.cam.y));
     }
   }
 
@@ -425,14 +446,19 @@ export class GameView {
   }
 
   drawUnits(ctx, vis) {
-    const drawn = new Set();
+    const piles = new Map();
     for (const u of living(this.game)) {
+      if (u.embarkedOn) continue;
       const p = displayPos(this.game, u);
       if (p.x < vis.x0 || p.x > vis.x1 || p.y < vis.y0 || p.y > vis.y1) continue;
       const k = p.x + "," + p.y;
-      if (drawn.has(k) && u.embarkedOn) continue;
-      drawn.add(k);
-      this.drawCounter(ctx, u, p);
+      if (!piles.has(k)) piles.set(k, []);
+      piles.get(k).push(u);
+    }
+    for (const group of piles.values()) {
+      group.sort((a, b) => a.combat - b.combat);
+      const n = group.length;
+      group.forEach((u, i) => this.drawCounter(ctx, u, displayPos(this.game, u), stackShift(i, n)));
     }
   }
 
@@ -458,35 +484,34 @@ export class GameView {
     ctx.restore();
   }
 
-  drawCounter(ctx, u, p) {
+  drawCounter(ctx, u, p, shift = { dx: 0, dy: 0 }) {
     const tile = TILE;
     const w = tile * 0.88;
     const h = tile * 0.8;
-    const px = p.x * tile + (tile - w) / 2;
-    const py = p.y * tile + (tile - h) / 2;
+    const px = p.x * tile + (tile - w) / 2 + shift.dx;
+    const py = p.y * tile + (tile - h) / 2 + shift.dy;
     const pal = SIDE_COL[u.side];
-    const r = Math.max(2, tile * 0.08);
     if (u.flash > 0) {
       ctx.fillStyle = `rgba(255,220,180,${u.flash})`;
-      roundRect(ctx, px - 2, py - 2, w + 4, h + 4, r);
+      traceCounter(ctx, u.side, px - 2, py - 2, w + 4, h + 4);
       ctx.fill();
       u.flash = Math.max(0, u.flash - 0.08);
     }
     ctx.fillStyle = "rgba(12, 8, 6, 0.4)";
-    roundRect(ctx, px + 1, py + 2, w, h, r);
+    traceCounter(ctx, u.side, px + 1, py + 2, w, h);
     ctx.fill();
     ctx.fillStyle = pal.fill;
-    roundRect(ctx, px, py, w, h, r);
+    traceCounter(ctx, u.side, px, py, w, h);
     ctx.fill();
     ctx.save();
-    roundRect(ctx, px, py, w, h, r);
+    traceCounter(ctx, u.side, px, py, w, h);
     ctx.clip();
     ctx.fillStyle = "rgba(255,255,255,0.07)";
     ctx.fillRect(px, py + h * 0.16, w, h * 0.08);
     ctx.fillRect(px, py + h * 0.74, w, h * 0.08);
     ctx.restore();
     const emblem = Math.min(h * 0.48, w * 0.38);
-    drawEmblem(ctx, u.side, px + w * 0.04, py + h * 0.06, emblem, pal.ink);
+    if (emblem >= 18) drawEmblem(ctx, u.side, px + w * 0.04, py + h * 0.06, emblem, pal.ink);
     drawTypeIcon(ctx, u.type, px + w * 0.46, py + h * 0.08, w * 0.48, h * 0.4, pal.ink);
     const fs = Math.max(16, Math.round(tile * 0.42));
     const num = String(u.combat);
@@ -495,19 +520,28 @@ export class GameView {
     ctx.textBaseline = "middle";
     const tw = ctx.measureText(num).width;
     const nx = px + w * 0.5;
-    const ny = py + h - fs * 0.52;
-    ctx.fillStyle = "rgba(12, 8, 6, 0.55)";
+    const ny = u.side === "norman" ? py + h - fs * 0.52 : py + h * 0.58;
+    ctx.fillStyle = "rgba(12, 8, 6, 0.72)";
     roundRect(ctx, nx - tw / 2 - 3, ny - fs * 0.46, tw + 6, fs * 0.92, 3);
     ctx.fill();
     ctx.fillStyle = "#fff6df";
     ctx.fillText(num, nx, ny);
-    ctx.strokeStyle = u.id === this.game.selectedId ? "#fff4c2" : pal.edge;
-    ctx.lineWidth = u.id === this.game.selectedId ? Math.max(2, tile * 0.055) : Math.max(1, tile * 0.03);
-    roundRect(ctx, px, py, w, h, r);
-    ctx.stroke();
+    traceCounter(ctx, u.side, px, py, w, h);
+    if (u.id === this.game.selectedId) {
+      ctx.strokeStyle = "#1a120c";
+      ctx.lineWidth = Math.max(5, tile * 0.11);
+      ctx.stroke();
+      ctx.strokeStyle = "#fffaf0";
+      ctx.lineWidth = Math.max(2, tile * 0.045);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = pal.edge;
+      ctx.lineWidth = Math.max(2.25, tile * 0.05);
+      ctx.stroke();
+    }
     if (u.broken) {
       ctx.save();
-      roundRect(ctx, px, py, w, h, r);
+      traceCounter(ctx, u.side, px, py, w, h);
       ctx.clip();
       ctx.strokeStyle = "rgba(20, 8, 6, 0.8)";
       ctx.lineWidth = Math.max(2, tile * 0.045);
@@ -550,6 +584,32 @@ export class GameView {
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillText("↑  " + text, x + 8, y + 14);
+    ctx.restore();
+  }
+
+  drawGaleLabel(ctx) {
+    if (!this.game.weather || this.game.weather.id !== "gale") return;
+    const text = "Gale";
+    ctx.save();
+    ctx.font = "700 18px Palatino Linotype, Palatino, serif";
+    const tw = ctx.measureText(text).width;
+    const x = 16;
+    const y = 16;
+    ctx.fillStyle = "rgba(8, 22, 42, 0.9)";
+    ctx.fillRect(x, y, tw + 36, 32);
+    ctx.strokeStyle = "#f4ead4";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, tw + 34, 30);
+    ctx.strokeStyle = "rgba(214, 228, 236, 0.9)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 8, y + 22);
+    ctx.lineTo(x + 16, y + 10);
+    ctx.stroke();
+    ctx.fillStyle = "#f4ead4";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 22, y + 16);
     ctx.restore();
   }
 
@@ -604,13 +664,21 @@ export class GameView {
       ctx.fillStyle = SIDE_COL[u.side].fill;
       ctx.fillRect(ox + p.x * scale, oy + p.y * scale, 2, 2);
     }
-    ctx.strokeStyle = PAL.gold;
-    ctx.strokeRect(
-      ox + (this.cam.x / TILE) * scale,
-      oy + (this.cam.y / TILE) * scale,
-      (this.viewW / TILE) * scale,
-      (this.vh / TILE) * scale,
-    );
+    const vx = ox + (this.cam.x / TILE) * scale;
+    const vy = oy + (this.cam.y / TILE) * scale;
+    const boxW = (this.viewW / TILE) * scale;
+    const boxH = (this.vh / TILE) * scale;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(ox, oy, mw, mh);
+    ctx.clip();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#1a120c";
+    ctx.strokeRect(vx, vy, boxW, boxH);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#fffaf0";
+    ctx.strokeRect(vx + 1.5, vy + 1.5, Math.max(0, boxW - 3), Math.max(0, boxH - 3));
+    ctx.restore();
   }
 
   drawHelp(ctx) {
@@ -771,22 +839,71 @@ function openingCenter(vh) {
   return { x: CHANNEL_X, y };
 }
 
+function stackShift(i, n) {
+  if (n <= 1) return { dx: 0, dy: 0 };
+  const span = Math.min(TILE * 0.46, TILE * 0.18 * (n - 1));
+  const along = (i * span) / (n - 1) - span / 2;
+  return { dx: along, dy: -along * 0.7 };
+}
+
 function counterBoxes(game) {
-  const seen = new Set();
-  const boxes = [];
-  const pad = TILE * 0.12;
+  const piles = new Map();
   for (const u of living(game)) {
+    if (u.embarkedOn) continue;
     const p = displayPos(game, u);
     const key = p.x + "," + p.y;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const w = TILE * 0.96;
-    const h = TILE * 0.92;
-    const px = p.x * TILE + (TILE - w) / 2;
-    const py = p.y * TILE + (TILE - h) / 2;
-    boxes.push({ l: px - pad, r: px + w + pad, t: py - pad, b: py + h + pad });
+    if (!piles.has(key)) piles.set(key, []);
+    piles.get(key).push(p);
+  }
+  const boxes = [];
+  const pad = TILE * 0.08;
+  const w = TILE * 0.88;
+  const h = TILE * 0.8;
+  for (const group of piles.values()) {
+    const p = group[0];
+    const n = group.length;
+    let l = Infinity;
+    let r = -Infinity;
+    let t = Infinity;
+    let b = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const s = stackShift(i, n);
+      const px = p.x * TILE + (TILE - w) / 2 + s.dx;
+      const py = p.y * TILE + (TILE - h) / 2 + s.dy;
+      l = Math.min(l, px);
+      r = Math.max(r, px + w);
+      t = Math.min(t, py);
+      b = Math.max(b, py + h);
+    }
+    boxes.push({ l: l - pad, r: r + pad, t: t - pad, b: b + pad });
   }
   return boxes;
+}
+
+function keepLabelOnScreen(lab, camY) {
+  if (lab.t >= camY + 4) return lab;
+  const px = labelPx();
+  const width = Math.max(8, lab.r - lab.l - 4);
+  const x = (lab.tx + 1) * TILE + width / 2 + 8;
+  const y = lab.ty * TILE + TILE * 0.78;
+  return { ...lab, x, y, leader: true, ...labelBox(x, y, width, px) };
+}
+
+function traceCounter(ctx, side, x, y, w, h) {
+  if (side === "english") {
+    roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.5);
+    return;
+  }
+  ctx.beginPath();
+  if (side === "norse") {
+    ctx.moveTo(x + w / 2, y);
+    ctx.lineTo(x + w, y + h / 2);
+    ctx.lineTo(x + w / 2, y + h);
+    ctx.lineTo(x, y + h / 2);
+    ctx.closePath();
+    return;
+  }
+  ctx.rect(x, y, w, h);
 }
 
 function hitsCounter(box, obstacles) {
