@@ -337,6 +337,7 @@ export class GameView {
     this.drawCursor(ctx);
     ctx.restore();
     this.drawNorthThreat(ctx);
+    this.drawMeteors(ctx);
     this.drawMinimap(ctx);
     if (this.help) this.drawHelp(ctx);
   }
@@ -351,7 +352,8 @@ export class GameView {
     for (let y = vis.y0; y <= vis.y1; y++) {
       for (let x = vis.x0; x <= vis.x1; x++) this.drawTile(ctx, x, y);
     }
-    this.tintGaleSea(ctx, g, vis);
+    this.washLand(ctx, g, vis);
+    this.washSea(ctx, g, vis);
     blitCoast(ctx, coastOf(g.map), this.cam, this.vw, this.vh);
   }
 
@@ -368,23 +370,72 @@ export class GameView {
         for (let x = vis.x0; x <= vis.x1; x++) this.drawTile(ctx, x, y);
       }
       ctx.restore();
-      this.tintGaleSea(ctx, g, vis);
+      this.washLand(ctx, g, vis);
+      this.washSea(ctx, g, vis);
       blitCoast(ctx, coastOf(g.map), this.cam, this.vw, this.vh);
       return;
     }
-    this.tintGaleSea(ctx, g, vis);
+    this.washLand(ctx, g, vis);
+    this.washSea(ctx, g, vis);
     blitCoast(ctx, playMarksOf(g.map), this.cam, this.vw, this.vh);
     drawTownMarks(ctx, g.towns);
   }
 
-  // A Channel gale reads on the water, not only in the weather line.
-  tintGaleSea(ctx, g, vis) {
-    if (!g.weather || g.weather.id !== "gale") return;
-    ctx.fillStyle = "rgba(8, 22, 42, 0.5)";
+  // Linen and wool over the photograph, so the land keeps the tapestry
+  // once the coast is crossed. Sea and the off-map cloth are left alone.
+  washLand(ctx, g, vis) {
     for (let y = vis.y0; y <= vis.y1; y++) {
       for (let x = vis.x0; x <= vis.x1; x++) {
-        if (terrainAt(gmap(g), x, y) !== TERRAIN.SEA) continue;
-        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+        const terr = terrainAt(gmap(g), x, y);
+        if (terr === TERRAIN.SEA || terr === TERRAIN.OUT) continue;
+        const px = x * TILE;
+        const py = y * TILE;
+        ctx.fillStyle = "rgba(196, 154, 96, 0.28)";
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.strokeStyle = "rgba(120, 78, 40, 0.16)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const step = Math.max(5, TILE / 5);
+        for (let i = step * 0.5; i < TILE; i += step) {
+          ctx.moveTo(px, py + i);
+          ctx.lineTo(px + TILE, py + i);
+        }
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Blue-green water with a stitched wave. A gale darkens only the Channel
+  // squares a fleet cannot cross, and leaves the North Sea and Irish Sea.
+  washSea(ctx, g, vis) {
+    const gale = g.weather && g.weather.id === "gale";
+    const time = this.time || 0;
+    const map = gmap(g);
+    for (let y = vis.y0; y <= vis.y1; y++) {
+      for (let x = vis.x0; x <= vis.x1; x++) {
+        if (terrainAt(map, x, y) !== TERRAIN.SEA) continue;
+        const px = x * TILE;
+        const py = y * TILE;
+        const storm = gale && channelCrossing(map, x, y);
+        ctx.fillStyle = storm ? "rgba(16, 36, 64, 0.62)" : "rgba(38, 116, 128, 0.42)";
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px, py, TILE, TILE);
+        ctx.clip();
+        ctx.strokeStyle = storm ? "rgba(186, 206, 220, 0.45)" : "rgba(214, 236, 226, 0.55)";
+        ctx.lineWidth = Math.max(1, TILE * 0.045);
+        ctx.setLineDash([Math.max(3, TILE * 0.16), Math.max(2, TILE * 0.12)]);
+        ctx.beginPath();
+        const bands = storm ? 3 : 2;
+        for (let b = 0; b < bands; b++) {
+          const base = py + TILE * ((b + 0.7) / (bands + 0.4));
+          const drift = storm ? (time * 18 + x * 5 + y * 3) % (TILE * 0.5) : 0;
+          ctx.moveTo(px - 2, base + drift);
+          ctx.quadraticCurveTo(px + TILE * 0.5, base - TILE * 0.16 + drift, px + TILE + 2, base + drift);
+        }
+        ctx.stroke();
+        ctx.restore();
       }
     }
   }
@@ -481,9 +532,19 @@ export class GameView {
     ctx.save();
     roundRect(ctx, px, py, w, h, r);
     ctx.clip();
-    ctx.fillStyle = "rgba(255,255,255,0.07)";
-    ctx.fillRect(px, py + h * 0.16, w, h * 0.08);
-    ctx.fillRect(px, py + h * 0.74, w, h * 0.08);
+    const weft = Math.max(2, h / 7);
+    for (let i = 0; i < h; i += weft) {
+      ctx.fillStyle = i % (weft * 2) < weft ? "rgba(255,236,200,0.14)" : "rgba(20, 8, 6, 0.16)";
+      ctx.fillRect(px, py + i, w, weft * 0.62);
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = pal.ink;
+    ctx.globalAlpha = 0.75;
+    ctx.lineWidth = Math.max(1, tile * 0.028);
+    ctx.setLineDash([Math.max(2, tile * 0.09), Math.max(2, tile * 0.07)]);
+    roundRect(ctx, px + 1.5, py + 1.5, w - 3, h - 3, Math.max(1, r - 1));
+    ctx.stroke();
     ctx.restore();
     const emblem = Math.min(h * 0.48, w * 0.38);
     drawEmblem(ctx, u.side, px + w * 0.04, py + h * 0.06, emblem, pal.ink);
@@ -564,6 +625,63 @@ export class GameView {
     ctx.globalAlpha = 1;
   }
 
+  // Orionids, the week of 20–21 October: a few stitches of Halley's debris.
+  drawMeteors(ctx) {
+    if (this.game.phase !== "resolve" || !orionidWeek(this.game)) return;
+    const tick = this.game.tick;
+    const shots = [
+      { from: 3, to: 11, x0: 0.08, y0: 0.1, x1: 0.4, y1: 0.42 },
+      { from: 9, to: 17, x0: 0.52, y0: 0.06, x1: 0.9, y1: 0.38 },
+      { from: 15, to: 23, x0: 0.16, y0: 0.04, x1: 0.5, y1: 0.36 },
+      { from: 21, to: 30, x0: 0.38, y0: 0.12, x1: 0.78, y1: 0.5 },
+    ];
+    const w = this.viewW;
+    const h = this.vh;
+    for (const s of shots) {
+      if (tick < s.from || tick > s.to) continue;
+      const u = (tick - s.from) / Math.max(1, s.to - s.from);
+      const head = u;
+      const tail = Math.max(0, u - 0.45);
+      const x1 = (s.x0 + (s.x1 - s.x0) * head) * w;
+      const y1 = (s.y0 + (s.y1 - s.y0) * head) * h;
+      const x0 = (s.x0 + (s.x1 - s.x0) * tail) * w;
+      const y0 = (s.y0 + (s.y1 - s.y0) * tail) * h;
+      const fade = u < 0.2 ? u / 0.2 : u > 0.72 ? (1 - u) / 0.28 : 1;
+      ctx.save();
+      ctx.globalAlpha = 0.95 * fade;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "rgba(20, 14, 8, 0.92)";
+      ctx.lineWidth = 11;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      ctx.strokeStyle = "#f7f3e8";
+      ctx.lineWidth = 6;
+      ctx.setLineDash([8, 5]);
+      ctx.stroke();
+      ctx.strokeStyle = "#8e1b28";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#f7f3e8";
+      ctx.strokeStyle = "#24180f";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x1, y1, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x1, y1 - 12);
+      ctx.lineTo(x1, y1 + 12);
+      ctx.moveTo(x1 - 12, y1);
+      ctx.lineTo(x1 + 12, y1);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   drawMinimap(ctx) {
     const scale = 2;
     const mw = this.game.w * scale;
@@ -580,7 +698,7 @@ export class GameView {
       for (let y = 0; y < this.game.h; y++) {
         for (let x = 0; x < this.game.w; x++) {
           if (terrainAt(gmap(this.game), x, y) !== TERRAIN.OUT) continue;
-          ctx.fillStyle = "rgba(214, 196, 166, 0.82)";
+          ctx.fillStyle = "rgba(36, 28, 22, 0.92)";
           ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
         }
       }
@@ -984,6 +1102,7 @@ function buildPlayMarks(map) {
   strokeLinks(ctx, map, roadLink, "rgba(232, 210, 156, 0.85)", 2);
   strokeLinks(ctx, map, riverLink, "rgba(27, 78, 122, 0.82)", 3);
   strokeCellShore(ctx, map);
+  strokeSoftNorman(ctx, map);
   return { map, overlay };
 }
 
@@ -1031,6 +1150,7 @@ function strokeCellShore(ctx, map) {
   for (let y = 0; y < map.h; y++) {
     for (let x = 0; x < map.w; x++) {
       if (terrainAt(map, x, y) === TERRAIN.SEA) continue;
+      if (normanCoastCell(x, y)) continue;
       const px = x * TILE;
       const py = y * TILE;
       if (terrainAt(map, x, y - 1) === TERRAIN.SEA) {
@@ -1057,6 +1177,12 @@ function strokeCellShore(ctx, map) {
   ctx.strokeStyle = "rgba(20, 14, 8, 0.82)";
   ctx.lineWidth = 1.25;
   ctx.stroke();
+  ctx.save();
+  ctx.strokeStyle = "rgba(122, 36, 28, 0.92)";
+  ctx.lineWidth = Math.max(1.5, TILE * 0.05);
+  ctx.setLineDash([Math.max(3, TILE * 0.16), Math.max(2, TILE * 0.12)]);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawTownMarks(ctx, towns) {
@@ -1172,6 +1298,12 @@ function paintSlivers(ctx, map, play, landEdge, seaEdge) {
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.stroke(play);
+  ctx.save();
+  ctx.strokeStyle = "rgba(122, 36, 28, 0.92)";
+  ctx.lineWidth = Math.max(1.5, TILE * 0.05);
+  ctx.setLineDash([Math.max(3, TILE * 0.16), Math.max(2, TILE * 0.12)]);
+  ctx.stroke(play);
+  ctx.restore();
 }
 
 function fillTerrainBase(ctx, px, py, terr) {
@@ -1422,19 +1554,187 @@ function gmap(game) {
   return game.map;
 }
 
+const DATE_RE = /^(\d{1,2}) ([A-Za-z]+) (\d{4})\.\s*(.*)$/;
+
+const WEATHER_CHRONICLE = {
+  "Fair wind": "a fair wind blew",
+  "East wind": "an east wind blew",
+  "Rain and chop": "rain and chop set in",
+  "Channel gale": "a gale closed the Channel",
+};
+
+// Newest first, same as the log. An event belongs to the next older date
+// line, because the week is recorded after the fighting.
 function formatLogLines(game) {
+  const raw = game.log;
   const out = [];
-  for (const line of game.log) {
-    if (out.length && out[out.length - 1] === line) continue;
-    out.push(line);
+  let sawOrionids = false;
+  for (let i = 0; i < raw.length; i++) {
+    const line = raw[i];
+    const self = line.match(DATE_RE);
+    let text;
+    if (self) {
+      const week = `${self[1]} ${self[2]}`;
+      if (week === "20 October") sawOrionids = true;
+      text = chronicleDate(week, self[4]);
+    } else {
+      let week = "";
+      for (let j = i + 1; j < raw.length; j++) {
+        const older = raw[j].match(DATE_RE);
+        if (older) {
+          week = `${older[1]} ${older[2]}`;
+          break;
+        }
+      }
+      text = chronicleEvent(game, week, line);
+    }
+    if (out.length && out[out.length - 1] === text) continue;
+    out.push(text);
+  }
+  if (sawOrionids && starsFell(game)) {
+    const star = "In the week of 20 October, stars fell over England.";
+    if (!out.includes(star)) out.unshift(star);
   }
   return out;
 }
 
+// The campaign week that contains 20–21 October, the Orionid shower.
+function orionidWeek(game) {
+  const d = dateOf(game);
+  return d.year === 1066 && d.month === 10 && d.day === 20;
+}
+
+function starsFell(game) {
+  const d = dateOf(game);
+  if (d.year !== 1066) return d.year > 1066;
+  if (d.month > 10 || (d.month === 10 && d.day > 20)) return true;
+  return orionidWeek(game) && game.phase !== "orders";
+}
+
+function chronicleDate(week, rest) {
+  const clean = String(rest || "").replace(/\.$/, "").trim();
+  if (WEATHER_CHRONICLE[clean]) return `In the week of ${week}, ${WEATHER_CHRONICLE[clean]}.`;
+  return clean ? `In the week of ${week}, ${clean}.` : `In the week of ${week}.`;
+}
+
+function chronicleEvent(game, week, line) {
+  const when = week ? `In the week of ${week}, ` : "";
+  let m = line.match(/^(.*) breaks\.$/);
+  if (m) return `${when}${m[1]} was broken${placeOf(game, m[1])}.`;
+  m = line.match(/^(.*) is destroyed by (.*)\.$/);
+  if (m) return `${when}${m[1]} was destroyed by ${m[2]}${placeOf(game, m[1])}.`;
+  m = line.match(/^(.*) is destroyed\.$/);
+  if (m) return `${when}${m[1]} was destroyed${placeOf(game, m[1])}.`;
+  m = line.match(/^(.*) answers the fyrd-call at (.*)\.$/);
+  if (m) return `${when}${m[1]} answered the fyrd-call at ${m[2]}.`;
+  const prose = String(line).replace(/\.$/, "");
+  return `${when}${prose}.`;
+}
+
+// Sea between the English south coast and Normandy. A gale closes this
+// water; the North Sea and the Irish Sea stay open on the board.
+function channelCrossing(map, x, y) {
+  if (y < 30 || x < 12) return false;
+  if (terrainAt(map, x, y) !== TERRAIN.SEA) return false;
+  let north = false;
+  let south = false;
+  for (let d = 1; d <= 6; d++) {
+    const tn = terrainAt(map, x, y - d);
+    const ts = terrainAt(map, x, y + d);
+    if (tn !== TERRAIN.SEA && tn !== TERRAIN.OUT) north = true;
+    if (ts !== TERRAIN.SEA && ts !== TERRAIN.OUT) south = true;
+  }
+  return north && south;
+}
+
+function normanCoastCell(x, y) {
+  return y >= 33 && y <= 40 && x >= 12 && x <= 26;
+}
+
+function normanCorner(p) {
+  return p.y >= 33 && p.y <= 41 && p.x >= 12 && p.x <= 27;
+}
+
+// The square shore of Normandy is a staircase. A short stitched curve
+// replaces that edge and leaves the rest of the coast on the cells.
+function appendOpenRun(path, pts) {
+  if (pts.length < 2) return;
+  const cuts = pts.map((cur, i) => {
+    const prev = pts[Math.max(0, i - 1)];
+    const next = pts[Math.min(pts.length - 1, i + 1)];
+    const v1x = cur.x - prev.x;
+    const v1y = cur.y - prev.y;
+    const v2x = next.x - cur.x;
+    const v2y = next.y - cur.y;
+    const l1 = Math.hypot(v1x, v1y) || 1;
+    const l2 = Math.hypot(v2x, v2y) || 1;
+    const cut = i === 0 || i === pts.length - 1 ? 0 : Math.min(COAST_RADIUS, l1 * 0.45, l2 * 0.45);
+    return {
+      bx: cur.x + (v2x / l2) * cut,
+      by: cur.y + (v2y / l2) * cut,
+      ax: cur.x - (v1x / l1) * cut,
+      ay: cur.y - (v1y / l1) * cut,
+      cur,
+    };
+  });
+  path.moveTo(cuts[0].bx * TILE, cuts[0].by * TILE);
+  for (let i = 1; i < cuts.length; i++) {
+    const s = cuts[i];
+    const mx = ((s.ax + s.bx) / 2) * (1 - COAST_ROUND) + s.cur.x * COAST_ROUND;
+    const my = ((s.ay + s.by) / 2) * (1 - COAST_ROUND) + s.cur.y * COAST_ROUND;
+    path.quadraticCurveTo(mx * TILE, my * TILE, s.bx * TILE, s.by * TILE);
+  }
+}
+
+function strokeSoftNorman(ctx, map) {
+  const path = new Path2D();
+  for (const loop of traceCoastLoops(map)) {
+    let run = [];
+    const flush = () => {
+      appendOpenRun(path, run);
+      run = [];
+    };
+    for (const p of loop) {
+      if (normanCorner(p)) run.push(p);
+      else flush();
+    }
+    flush();
+  }
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(248, 240, 220, 0.85)";
+  ctx.lineWidth = Math.max(3, TILE * 0.08);
+  ctx.stroke(path);
+  ctx.strokeStyle = "rgba(20, 14, 8, 0.88)";
+  ctx.lineWidth = Math.max(1.25, TILE * 0.035);
+  ctx.stroke(path);
+  ctx.strokeStyle = "rgba(122, 36, 28, 0.92)";
+  ctx.lineWidth = Math.max(1.5, TILE * 0.05);
+  ctx.setLineDash([Math.max(3, TILE * 0.16), Math.max(2, TILE * 0.12)]);
+  ctx.stroke(path);
+  ctx.restore();
+}
+
+function placeOf(game, name) {
+  const u = game.units.find((unit) => unit.name === name);
+  if (!u || !game.towns.length) return "";
+  let best = game.towns[0];
+  let bestD = Infinity;
+  for (const town of game.towns) {
+    const d = Math.abs(town.x - u.x) + Math.abs(town.y - u.y);
+    if (d < bestD) {
+      bestD = d;
+      best = town;
+    }
+  }
+  return ` near ${best.name}`;
+}
+
 function paintVellum(ctx, px, py, size) {
-  ctx.fillStyle = "rgba(232, 216, 186, 0.86)";
+  ctx.fillStyle = "rgba(36, 28, 22, 0.92)";
   ctx.fillRect(px, py, size, size);
-  ctx.strokeStyle = "rgba(128, 96, 58, 0.16)";
+  ctx.strokeStyle = "rgba(12, 8, 6, 0.4)";
   ctx.lineWidth = 1;
   const step = Math.max(5, size / 5.5);
   ctx.beginPath();

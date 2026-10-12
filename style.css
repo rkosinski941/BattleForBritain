@@ -38,6 +38,41 @@ select {
   justify-content: center;
 }
 
+#title {
+  position: relative;
+  overflow: hidden;
+}
+
+.comet {
+  position: absolute;
+  top: 22px;
+  right: 28px;
+  width: min(460px, 42vw);
+  margin: 0;
+  pointer-events: none;
+  z-index: 2;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
+}
+
+.comet svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.comet figcaption {
+  display: inline-block;
+  float: right;
+  margin: 8px 0 0;
+  padding: 4px 10px;
+  background: rgba(28, 20, 12, 0.88);
+  border: 1px solid rgba(212, 180, 90, 0.75);
+  font-size: 13px;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  color: #f4ead4;
+}
+
 .screen.dim {
   background-color: #120e0a;
 }
@@ -306,8 +341,10 @@ button:hover:not(:disabled) {
   list-style: none;
   padding: 0;
   margin: 0 0 12px;
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--cream);
   max-height: 28vh;
   overflow: auto;
 }
