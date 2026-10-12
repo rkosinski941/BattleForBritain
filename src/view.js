@@ -390,7 +390,7 @@ export class GameView {
         if (terr === TERRAIN.SEA || terr === TERRAIN.OUT) continue;
         const px = x * TILE;
         const py = y * TILE;
-        ctx.fillStyle = "rgba(196, 154, 96, 0.28)";
+        ctx.fillStyle = "rgba(232, 220, 192, 0.72)";
         ctx.fillRect(px, py, TILE, TILE);
         ctx.strokeStyle = "rgba(120, 78, 40, 0.16)";
         ctx.lineWidth = 1;
@@ -405,7 +405,7 @@ export class GameView {
     }
   }
 
-  // Blue-green water with a stitched wave. A gale darkens only the Channel
+  // Blue-green water in two dyes, laid in wavy bands. A gale darkens only the Channel
   // squares a fleet cannot cross, and leaves the North Sea and Irish Sea.
   washSea(ctx, g, vis) {
     const gale = g.weather && g.weather.id === "gale";
@@ -417,24 +417,25 @@ export class GameView {
         const px = x * TILE;
         const py = y * TILE;
         const storm = gale && channelCrossing(map, x, y);
-        ctx.fillStyle = storm ? "rgba(16, 36, 64, 0.62)" : "rgba(38, 116, 128, 0.42)";
+        ctx.fillStyle = storm ? "rgba(16, 36, 64, 0.82)" : "#4f7a8a";
         ctx.fillRect(px, py, TILE, TILE);
         ctx.save();
         ctx.beginPath();
         ctx.rect(px, py, TILE, TILE);
         ctx.clip();
-        ctx.strokeStyle = storm ? "rgba(186, 206, 220, 0.45)" : "rgba(214, 236, 226, 0.55)";
-        ctx.lineWidth = Math.max(1, TILE * 0.045);
-        ctx.setLineDash([Math.max(3, TILE * 0.16), Math.max(2, TILE * 0.12)]);
-        ctx.beginPath();
-        const bands = storm ? 3 : 2;
+        ctx.lineCap = "round";
+        ctx.setLineDash([]);
+        const bands = 3;
         for (let b = 0; b < bands; b++) {
-          const base = py + TILE * ((b + 0.7) / (bands + 0.4));
-          const drift = storm ? (time * 18 + x * 5 + y * 3) % (TILE * 0.5) : 0;
+          const base = py + TILE * ((b + 0.85) / (bands + 0.7));
+          const drift = storm ? (time * 14 + x * 4) % (TILE * 0.35) : (x + y) % 2;
+          ctx.strokeStyle = storm ? "rgba(111, 154, 140, 0.9)" : "#6f9a8c";
+          ctx.lineWidth = Math.max(2.5, TILE * 0.16);
+          ctx.beginPath();
           ctx.moveTo(px - 2, base + drift);
-          ctx.quadraticCurveTo(px + TILE * 0.5, base - TILE * 0.16 + drift, px + TILE + 2, base + drift);
+          ctx.quadraticCurveTo(px + TILE * 0.5, base - TILE * 0.2 + drift, px + TILE + 2, base + drift);
+          ctx.stroke();
         }
-        ctx.stroke();
         ctx.restore();
       }
     }
@@ -1559,9 +1560,22 @@ const DATE_RE = /^(\d{1,2}) ([A-Za-z]+) (\d{4})\.\s*(.*)$/;
 const WEATHER_CHRONICLE = {
   "Fair wind": "a fair wind blew",
   "East wind": "an east wind blew",
-  "Rain and chop": "rain and chop set in",
+  "Rain and chop": "rain and rough sea set in",
   "Channel gale": "a gale closed the Channel",
 };
+
+// Feast days that fall inside a four-day campaign week. Other weeks keep the date.
+const FEASTS = {
+  "18 September": "About the feast of St Matthew",
+  "26 September": "At Michaelmas",
+  "12 October": "On the feast of St Calixtus",
+  "9 November": "On the feast of St Martin",
+};
+
+function datePhrase(week) {
+  if (!week) return "";
+  return FEASTS[week] || `On ${week}`;
+}
 
 // Newest first, same as the log. An event belongs to the next older date
 // line, because the week is recorded after the fighting.
@@ -1592,7 +1606,7 @@ function formatLogLines(game) {
     out.push(text);
   }
   if (sawOrionids && starsFell(game)) {
-    const star = "In the week of 20 October, stars fell over England.";
+    const star = "On 20 October, stars fell over England.";
     if (!out.includes(star)) out.unshift(star);
   }
   return out;
@@ -1613,14 +1627,15 @@ function starsFell(game) {
 
 function chronicleDate(week, rest) {
   const clean = String(rest || "").replace(/\.$/, "").trim();
-  if (WEATHER_CHRONICLE[clean]) return `In the week of ${week}, ${WEATHER_CHRONICLE[clean]}.`;
-  return clean ? `In the week of ${week}, ${clean}.` : `In the week of ${week}.`;
+  const when = datePhrase(week);
+  if (WEATHER_CHRONICLE[clean]) return `${when}, ${WEATHER_CHRONICLE[clean]}.`;
+  return clean ? `${when}, ${clean}.` : `${when}.`;
 }
 
 function chronicleEvent(game, week, line) {
-  const when = week ? `In the week of ${week}, ` : "";
+  const when = week ? `${datePhrase(week)}, ` : "";
   let m = line.match(/^(.*) breaks\.$/);
-  if (m) return `${when}${m[1]} was broken${placeOf(game, m[1])}.`;
+  if (m) return `${when}${m[1]} was put to flight${placeOf(game, m[1])}.`;
   m = line.match(/^(.*) is destroyed by (.*)\.$/);
   if (m) return `${when}${m[1]} was destroyed by ${m[2]}${placeOf(game, m[1])}.`;
   m = line.match(/^(.*) is destroyed\.$/);
