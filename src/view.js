@@ -23,6 +23,17 @@ import {
   unitsAt,
 } from "./engine.js";
 import { planAI } from "./ai.js";
+import {
+  armAudio,
+  audioMarkup,
+  bindAudio,
+  playBreakCue,
+  playCombat,
+  playMarchTick,
+  playTownFanfare,
+  playTurnSting,
+  syncGale,
+} from "./sound.js";
 
 const PAL = {
   sea: ["#1f3d58", "#2b5574"],
@@ -85,14 +96,59 @@ export class GameView {
     canvas.focus();
     this.centerOnCursor(true);
     planAI(this.game);
+    this.pendingStrength = 0;
+    this.pendingBreak = false;
+    this.rememberBoard();
+    syncGale(this.game.weather.id === "gale");
     this.paintHud();
     requestAnimationFrame(this.loop);
   }
 
   destroy() {
     this.running = false;
+    syncGale(false);
     window.removeEventListener("resize", this.resize);
     window.removeEventListener("keydown", this.onKey);
+  }
+
+  rememberBoard() {
+    this.heard = new Map(
+      this.game.units.map((u) => [u.id, { combat: u.combat, broken: !!u.broken, flash: u.flash || 0 }]),
+    );
+  }
+
+  auditResolve(skipped) {
+    if (!this.heard) this.rememberBoard();
+    let strength = 0;
+    let hits = 0;
+    let broke = false;
+    for (const u of this.game.units) {
+      const prev = this.heard.get(u.id);
+      if (!prev) continue;
+      if (u.alive && !prev.broken && u.broken) broke = true;
+      if ((u.flash || 0) > prev.flash + 0.2 || u.combat < prev.combat - 0.5) {
+        hits += 1;
+        strength += Math.max(prev.combat, 8);
+      }
+      prev.combat = u.combat;
+      prev.broken = !!u.broken;
+      prev.flash = u.flash || 0;
+    }
+    if (skipped) {
+      if (hits) this.pendingStrength += strength;
+      if (broke) this.pendingBreak = true;
+      return;
+    }
+    if (hits) playCombat(strength);
+    if (broke) playBreakCue();
+    if (this.game.tick % 8 === 1) playMarchTick();
+  }
+
+  flushSkipped() {
+    if (this.pendingStrength > 0) playCombat(this.pendingStrength);
+    if (this.pendingBreak) playBreakCue();
+    this.pendingStrength = 0;
+    this.pendingBreak = false;
   }
 
   resize() {
@@ -236,6 +292,11 @@ export class GameView {
     beginResolve(this.game);
     this.resolveAcc = 0;
     this.skipResolve = false;
+    this.pendingStrength = 0;
+    this.pendingBreak = false;
+    this.rememberBoard();
+    armAudio();
+    playTurnSting();
     this.paintHud();
   }
 
@@ -247,26 +308,33 @@ export class GameView {
     this.centerOnCursor(false);
     if (this.game.phase === "resolve") {
       const finish = () => {
+        const owners = this.game.towns.map((t) => t.owner);
         applyUpkeep(this.game);
+        if (this.game.towns.some((t, i) => t.owner !== owners[i])) playTownFanfare();
+        syncGale(this.game.weather.id === "gale");
+        this.rememberBoard();
         if (this.game.phase === "orders") planAI(this.game);
         if (this.game.phase === "ended" && this.onEnded) this.onEnded(this.game);
         this.paintHud();
       };
+      const step = (skipped) => {
+        const done = stepTick(this.game);
+        this.auditResolve(skipped);
+        if (done) {
+          if (skipped) this.flushSkipped();
+          finish();
+        }
+        return done;
+      };
       if (this.skipResolve) {
         while (this.game.phase === "resolve") {
-          if (stepTick(this.game)) {
-            finish();
-            break;
-          }
+          if (step(true)) break;
         }
       } else {
         this.resolveAcc += dt;
         while (this.game.phase === "resolve" && this.resolveAcc >= 0.07) {
           this.resolveAcc -= 0.07;
-          if (stepTick(this.game)) {
-            finish();
-            break;
-          }
+          if (step(false)) break;
         }
       }
     }
@@ -527,6 +595,7 @@ export class GameView {
         <span class="english">English ${sideScore(g, "english")}</span>
         <span class="norse">Norse ${sideScore(g, "norse")}</span>
       </div>
+      ${audioMarkup()}
       <div class="btns">
         <button id="endturn" ${g.phase !== "orders" ? "disabled" : ""}>Execute week (T)</button>
         <button id="nextu">Next unit (N)</button>
@@ -581,6 +650,7 @@ export class GameView {
     bindDir("#dirS", 0, 1);
     bindDir("#dirW", -1, 0);
     bindDir("#dirE", 1, 0);
+    bindAudio(this.hud);
   }
 
   refreshHudBits() {

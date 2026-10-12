@@ -1,6 +1,7 @@
 import { loadMap } from "./world.js";
 import { createGame } from "./engine.js";
 import { GameView, loadBoardImage } from "./view.js";
+import { allowTitleTheme, armAudio, startTitleTheme, stopTitleTheme } from "./sound.js";
 
 const title = document.getElementById("title");
 const howto = document.getElementById("howto");
@@ -25,7 +26,20 @@ loadMap()
     console.error(err);
   });
 
+let leavingTitle = false;
+document.getElementById("play").addEventListener("pointerdown", () => {
+  leavingTitle = true;
+});
 document.getElementById("play").addEventListener("click", () => start());
+document.addEventListener("pointerdown", onFirstGesture);
+document.addEventListener("keydown", onFirstGesture);
+
+function onFirstGesture() {
+  armAudio();
+  const skipTheme = leavingTitle;
+  leavingTitle = false;
+  if (!title.hidden && !skipTheme) startTitleTheme();
+}
 document.getElementById("open-help").addEventListener("click", () => {
   howto.hidden = false;
 });
@@ -35,10 +49,13 @@ document.getElementById("close-help").addEventListener("click", () => {
 document.getElementById("again").addEventListener("click", () => {
   endScreen.hidden = true;
   title.hidden = false;
+  allowTitleTheme();
 });
 
 function start() {
   if (!mapData) return;
+  armAudio();
+  stopTitleTheme();
   const difficulty = document.getElementById("diff").value;
   const seed = (Date.now() ^ 1066) >>> 0;
   const game = createGame(mapData, difficulty, seed);
