@@ -390,7 +390,10 @@ export class GameView {
         if (terr === TERRAIN.SEA || terr === TERRAIN.OUT) continue;
         const px = x * TILE;
         const py = y * TILE;
-        ctx.fillStyle = "rgba(232, 220, 192, 0.72)";
+        // Two coats. One pass at 0.75 still left the photograph in the land,
+        // and the sea stayed under 3:1 against it.
+        ctx.fillStyle = "rgba(232, 220, 192, 0.75)";
+        ctx.fillRect(px, py, TILE, TILE);
         ctx.fillRect(px, py, TILE, TILE);
         ctx.strokeStyle = "rgba(120, 78, 40, 0.16)";
         ctx.lineWidth = 1;
@@ -430,7 +433,7 @@ export class GameView {
           const base = py + TILE * ((b + 0.85) / (bands + 0.7));
           const drift = storm ? (time * 14 + x * 4) % (TILE * 0.35) : (x + y) % 2;
           ctx.strokeStyle = storm ? "rgba(111, 154, 140, 0.9)" : "#6f9a8c";
-          ctx.lineWidth = Math.max(2.5, TILE * 0.16);
+          ctx.lineWidth = Math.max(2, TILE * 0.09);
           ctx.beginPath();
           ctx.moveTo(px - 2, base + drift);
           ctx.quadraticCurveTo(px + TILE * 0.5, base - TILE * 0.2 + drift, px + TILE + 2, base + drift);
