@@ -349,6 +349,7 @@ export class GameView {
     for (let y = vis.y0; y <= vis.y1; y++) {
       for (let x = vis.x0; x <= vis.x1; x++) this.drawTile(ctx, x, y);
     }
+    this.washSea(ctx, g, vis);
     blitCoast(ctx, coastOf(g.map), this.cam, this.vw, this.vh);
   }
 
@@ -365,11 +366,54 @@ export class GameView {
         for (let x = vis.x0; x <= vis.x1; x++) this.drawTile(ctx, x, y);
       }
       ctx.restore();
+      this.washSea(ctx, g, vis);
       blitCoast(ctx, coastOf(g.map), this.cam, this.vw, this.vh);
       return;
     }
+    this.washSea(ctx, g, vis);
     blitCoast(ctx, playMarksOf(g.map), this.cam, this.vw, this.vh);
     drawTownMarks(ctx, g.towns);
+  }
+
+  // Warm the photograph's water toward linen. A gale darkens the same
+  // tiles and pulls streaks across them, so the weather is on the board.
+  washSea(ctx, g, vis) {
+    const gale = g.weather && g.weather.id === "gale";
+    const time = this.time || 0;
+    for (let y = vis.y0; y <= vis.y1; y++) {
+      for (let x = vis.x0; x <= vis.x1; x++) {
+        if (terrainAt(gmap(g), x, y) !== TERRAIN.SEA) continue;
+        const px = x * TILE;
+        const py = y * TILE;
+        ctx.fillStyle = gale ? "rgba(36, 48, 62, 0.58)" : "rgba(196, 168, 118, 0.4)";
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.strokeStyle = gale ? "rgba(18, 24, 32, 0.4)" : "rgba(110, 84, 48, 0.2)";
+        ctx.lineWidth = 1;
+        const step = Math.max(4, TILE / 6);
+        ctx.beginPath();
+        for (let i = step * 0.4; i < TILE; i += step) {
+          ctx.moveTo(px, py + i);
+          ctx.lineTo(px + TILE, py + i);
+        }
+        ctx.stroke();
+        if (!gale) continue;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px, py, TILE, TILE);
+        ctx.clip();
+        ctx.strokeStyle = "rgba(214, 224, 232, 0.42)";
+        ctx.lineWidth = Math.max(1, TILE * 0.05);
+        ctx.beginPath();
+        const shift = (time * 26 + (x * 5 + y * 3)) % (TILE * 1.2);
+        for (let s = -TILE; s < TILE * 2; s += TILE * 0.5) {
+          const o = s + shift;
+          ctx.moveTo(px + o, py);
+          ctx.lineTo(px + o - TILE * 0.7, py + TILE);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
   }
 
   drawTownLabels(ctx, vis) {
@@ -464,9 +508,19 @@ export class GameView {
     ctx.save();
     roundRect(ctx, px, py, w, h, r);
     ctx.clip();
-    ctx.fillStyle = "rgba(255,255,255,0.07)";
-    ctx.fillRect(px, py + h * 0.16, w, h * 0.08);
-    ctx.fillRect(px, py + h * 0.74, w, h * 0.08);
+    const weft = Math.max(2, h / 7);
+    for (let i = 0; i < h; i += weft) {
+      ctx.fillStyle = i % (weft * 2) < weft ? "rgba(255,236,200,0.14)" : "rgba(20, 8, 6, 0.16)";
+      ctx.fillRect(px, py + i, w, weft * 0.62);
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = pal.ink;
+    ctx.globalAlpha = 0.75;
+    ctx.lineWidth = Math.max(1, tile * 0.028);
+    ctx.setLineDash([Math.max(2, tile * 0.09), Math.max(2, tile * 0.07)]);
+    roundRect(ctx, px + 1.5, py + 1.5, w - 3, h - 3, Math.max(1, r - 1));
+    ctx.stroke();
     ctx.restore();
     const emblem = Math.min(h * 0.7, w * 0.4);
     drawEmblem(ctx, u.side, px + w * 0.05, py + (h - emblem) / 2, emblem, pal.ink);
@@ -968,6 +1022,12 @@ function strokeCellShore(ctx, map) {
   ctx.strokeStyle = "rgba(20, 14, 8, 0.82)";
   ctx.lineWidth = 1.25;
   ctx.stroke();
+  ctx.save();
+  ctx.strokeStyle = "rgba(122, 36, 28, 0.92)";
+  ctx.lineWidth = Math.max(1.5, TILE * 0.05);
+  ctx.setLineDash([Math.max(3, TILE * 0.16), Math.max(2, TILE * 0.12)]);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawTownMarks(ctx, towns) {
@@ -1083,6 +1143,12 @@ function paintSlivers(ctx, map, play, landEdge, seaEdge) {
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.stroke(play);
+  ctx.save();
+  ctx.strokeStyle = "rgba(122, 36, 28, 0.92)";
+  ctx.lineWidth = Math.max(1.5, TILE * 0.05);
+  ctx.setLineDash([Math.max(3, TILE * 0.16), Math.max(2, TILE * 0.12)]);
+  ctx.stroke(play);
+  ctx.restore();
 }
 
 function fillTerrainBase(ctx, px, py, terr) {
@@ -1333,13 +1399,76 @@ function gmap(game) {
   return game.map;
 }
 
+const DATE_RE = /^(\d{1,2}) ([A-Za-z]+) (\d{4})\.\s*(.*)$/;
+
+const WEATHER_CHRONICLE = {
+  "Fair wind": "a fair wind blew",
+  "East wind": "an east wind blew",
+  "Rain and chop": "rain and chop set in",
+  "Channel gale": "a gale closed the Channel",
+};
+
+// Newest first, same as the log. An event belongs to the next older date
+// line, because the week is recorded after the fighting.
 function formatLogLines(game) {
+  const raw = game.log;
   const out = [];
-  for (const line of game.log) {
-    if (out.length && out[out.length - 1] === line) continue;
-    out.push(line);
+  for (let i = 0; i < raw.length; i++) {
+    const line = raw[i];
+    const self = line.match(DATE_RE);
+    let text;
+    if (self) {
+      text = chronicleDate(`${self[1]} ${self[2]}`, self[4]);
+    } else {
+      let week = "";
+      for (let j = i + 1; j < raw.length; j++) {
+        const older = raw[j].match(DATE_RE);
+        if (older) {
+          week = `${older[1]} ${older[2]}`;
+          break;
+        }
+      }
+      text = chronicleEvent(game, week, line);
+    }
+    if (out.length && out[out.length - 1] === text) continue;
+    out.push(text);
   }
   return out;
+}
+
+function chronicleDate(week, rest) {
+  if (WEATHER_CHRONICLE[rest]) return `In the week of ${week}, ${WEATHER_CHRONICLE[rest]}.`;
+  const prose = String(rest || "").replace(/\.$/, "");
+  return prose ? `In the week of ${week}, ${prose}.` : `In the week of ${week}.`;
+}
+
+function chronicleEvent(game, week, line) {
+  const when = week ? `In the week of ${week}, ` : "";
+  let m = line.match(/^(.*) breaks\.$/);
+  if (m) return `${when}${m[1]} was broken${placeOf(game, m[1])}.`;
+  m = line.match(/^(.*) is destroyed by (.*)\.$/);
+  if (m) return `${when}${m[1]} was destroyed by ${m[2]}${placeOf(game, m[1])}.`;
+  m = line.match(/^(.*) is destroyed\.$/);
+  if (m) return `${when}${m[1]} was destroyed${placeOf(game, m[1])}.`;
+  m = line.match(/^(.*) answers the fyrd-call at (.*)\.$/);
+  if (m) return `${when}${m[1]} answered the fyrd-call at ${m[2]}.`;
+  const prose = String(line).replace(/\.$/, "");
+  return `${when}${prose}.`;
+}
+
+function placeOf(game, name) {
+  const u = game.units.find((unit) => unit.name === name);
+  if (!u || !game.towns.length) return "";
+  let best = game.towns[0];
+  let bestD = Infinity;
+  for (const town of game.towns) {
+    const d = Math.abs(town.x - u.x) + Math.abs(town.y - u.y);
+    if (d < bestD) {
+      bestD = d;
+      best = town;
+    }
+  }
+  return ` near ${best.name}`;
 }
 
 function paintVellum(ctx, px, py, size) {
