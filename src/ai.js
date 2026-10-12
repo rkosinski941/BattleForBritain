@@ -1,4 +1,4 @@
-import { DIRS, englandLat, townByName } from "./world.js";
+import { DIRS, ENGLAND_LAT, TERRAIN, terrainAt, townByName } from "./world.js";
 import { displayPos, landUnitAt, living, pathToOrders, unitById } from "./engine.js";
 
 function nearest(game, units, x, y) {
@@ -37,18 +37,37 @@ function attackNearest(game, u, foes) {
   setToward(game, u, tp.x, tp.y);
 }
 
+// A Norman on English land, not a ship and not the Normandy shore. Row 33 is
+// the Channel; Eustace starts on its clear cell at 24,33, and y >= 33 is the
+// Norman side. Sea and out of play do not count.
+function onEnglishLand(game, u) {
+  if (!u || u.side !== "norman" || u.type === "fleet" || u.embarkedOn) return false;
+  const p = displayPos(game, u);
+  if (p.y >= ENGLAND_LAT) return false;
+  const terr = terrainAt(game.map, p.x, p.y);
+  // River is a hull's square, not a landing. Beach, road, and town count.
+  return terr !== TERRAIN.SEA && terr !== TERRAIN.RIVER && terr !== TERRAIN.OUT;
+}
+
+// Sticky. Once any Norman has stood on English land, later embarking does not
+// clear it. planAI and the fyrd-call both read this.
+export function noteNormansLanded(game) {
+  if (!game.flags) game.flags = {};
+  if (game.flags.normansLanded) return true;
+  if (living(game).some((u) => onEnglishLand(game, u))) game.flags.normansLanded = true;
+  return !!game.flags.normansLanded;
+}
+
 export function planAI(game) {
   const norse = living(game).filter((u) => u.side === "norse");
   const english = living(game).filter((u) => u.side === "english");
-  const normanLand = living(game).filter(
-    (u) => u.side === "norman" && u.type !== "fleet" && !u.embarkedOn && englandLat(u.y),
-  );
+  const normanLand = living(game).filter((u) => onEnglishLand(game, u));
   const york = game.towns.find((t) => t.name === "York");
   const london = game.towns.find((t) => t.name === "London");
   const winchester = game.towns.find((t) => t.name === "Winchester");
   const harold = unitById(game, "harold");
   const norseAlive = norse.some((u) => u.type !== "fleet");
-  const williamLanded = normanLand.length > 0;
+  const williamLanded = noteNormansLanded(game);
 
   for (const u of norse) {
     if (!u.alive) continue;
@@ -71,6 +90,14 @@ export function planAI(game) {
   for (const u of english) {
     const north = u.region === "north" || u.id === "edwin" || u.id === "morcar";
     const royal = u.region === "royal" || u.id === "harold" || u.id === "gyrth" || u.id === "leofwine";
+
+    // A real landing outranks the Norse chase for the royal house only.
+    // Before that, Harold, Gyrth and Leofwine still march north.
+    if (royal && williamLanded) {
+      if (normanLand.length) attackNearest(game, u, normanLand);
+      else if (london) setToward(game, u, london.x, london.y);
+      continue;
+    }
 
     if (norseAlive && (north || royal)) {
       attackNearest(game, u, norse.filter((n) => n.type !== "fleet"));

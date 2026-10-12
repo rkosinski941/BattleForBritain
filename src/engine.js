@@ -1,3 +1,4 @@
+import { noteNormansLanded } from "./ai.js";
 import {
   DIRS,
   MAX_ORDERS,
@@ -48,6 +49,7 @@ export function createGame(map, difficulty = "normal", seed = 1066) {
     cursor: { x: 0, y: 0 },
     selectedId: null,
     log: [],
+    flags: { normansLanded: false },
     winner: null,
     score: 0,
     flash: [],
@@ -647,10 +649,9 @@ function captureTowns(game) {
 }
 
 function englishLevies(game) {
-  const landed = living(game).some(
-    (u) => u.side === "norman" && u.type !== "fleet" && !u.embarkedOn && englandLat(u.y),
-  );
-  if (!landed) return;
+  // Same sticky test as planAI. Imported here so a landing during this week
+  // is visible at upkeep, before the next orders phase.
+  if (!noteNormansLanded(game)) return;
   if (game.turn !== 6 && game.turn !== 9 && game.turn !== 12) return;
   const spots = ["Gloucester", "Oxford", "Lincoln"];
   const names = ["Gloucester Fyrd", "Oxford Fyrd", "Lindsey Fyrd"];
