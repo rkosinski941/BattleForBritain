@@ -630,10 +630,10 @@ export class GameView {
     if (this.game.phase !== "resolve" || !orionidWeek(this.game)) return;
     const tick = this.game.tick;
     const shots = [
-      { from: 2, to: 7, x0: 0.1, y0: 0.14, x1: 0.36, y1: 0.46 },
-      { from: 10, to: 15, x0: 0.58, y0: 0.08, x1: 0.88, y1: 0.36 },
-      { from: 18, to: 23, x0: 0.18, y0: 0.06, x1: 0.46, y1: 0.34 },
-      { from: 26, to: 31, x0: 0.42, y0: 0.18, x1: 0.74, y1: 0.52 },
+      { from: 3, to: 11, x0: 0.08, y0: 0.1, x1: 0.4, y1: 0.42 },
+      { from: 9, to: 17, x0: 0.52, y0: 0.06, x1: 0.9, y1: 0.38 },
+      { from: 15, to: 23, x0: 0.16, y0: 0.04, x1: 0.5, y1: 0.36 },
+      { from: 21, to: 30, x0: 0.38, y0: 0.12, x1: 0.78, y1: 0.5 },
     ];
     const w = this.viewW;
     const h = this.vh;
@@ -648,29 +648,35 @@ export class GameView {
       const y0 = (s.y0 + (s.y1 - s.y0) * tail) * h;
       const fade = u < 0.2 ? u / 0.2 : u > 0.72 ? (1 - u) / 0.28 : 1;
       ctx.save();
-      ctx.globalAlpha = 0.92 * fade;
+      ctx.globalAlpha = 0.95 * fade;
       ctx.lineCap = "round";
-      ctx.strokeStyle = "rgba(20, 14, 8, 0.9)";
-      ctx.lineWidth = 8;
+      ctx.strokeStyle = "rgba(20, 14, 8, 0.92)";
+      ctx.lineWidth = 11;
       ctx.beginPath();
       ctx.moveTo(x0, y0);
       ctx.lineTo(x1, y1);
       ctx.stroke();
-      ctx.strokeStyle = "rgba(246, 241, 228, 0.96)";
-      ctx.lineWidth = 4.5;
-      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = "#f7f3e8";
+      ctx.lineWidth = 6;
+      ctx.setLineDash([8, 5]);
       ctx.stroke();
-      ctx.strokeStyle = "rgba(142, 27, 40, 0.95)";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([3, 5]);
+      ctx.strokeStyle = "#8e1b28";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 6]);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = "#f7f3e8";
-      ctx.beginPath();
-      ctx.arc(x1, y1, 5, 0, Math.PI * 2);
-      ctx.fill();
       ctx.strokeStyle = "#24180f";
-      ctx.lineWidth = 1.6;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x1, y1, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x1, y1 - 12);
+      ctx.lineTo(x1, y1 + 12);
+      ctx.moveTo(x1 - 12, y1);
+      ctx.lineTo(x1 + 12, y1);
       ctx.stroke();
       ctx.restore();
     }
