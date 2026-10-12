@@ -106,9 +106,7 @@ export class GameView {
     const h = wrap.clientHeight;
     const hudW = this.hud ? this.hud.getBoundingClientRect().width : 0;
     const viewW = Math.max(160, w - hudW);
-    const focus = this.viewW
-      ? { x: (this.cam.x + this.viewW / 2) / TILE, y: (this.cam.y + this.vh / 2) / TILE }
-      : { x: CHANNEL_X, y: CHANNEL_Y };
+    const first = this.viewW === 0;
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
     this.canvas.width = Math.floor(w * this.dpr);
     this.canvas.height = Math.floor(h * this.dpr);
@@ -124,6 +122,9 @@ export class GameView {
       playMemo = null;
       coastMemo = null;
     }
+    const focus = first
+      ? openingCenter(h)
+      : { x: (this.cam.x + viewW / 2) / TILE, y: (this.cam.y + h / 2) / TILE };
     this.centerOnCell(focus.x, focus.y, true);
   }
 
@@ -335,6 +336,7 @@ export class GameView {
     this.drawTownLabels(ctx, vis);
     this.drawCursor(ctx);
     ctx.restore();
+    this.drawNorthThreat(ctx);
     this.drawMinimap(ctx);
     if (this.help) this.drawHelp(ctx);
   }
@@ -349,6 +351,7 @@ export class GameView {
     for (let y = vis.y0; y <= vis.y1; y++) {
       for (let x = vis.x0; x <= vis.x1; x++) this.drawTile(ctx, x, y);
     }
+    this.washLand(ctx, g, vis);
     this.washSea(ctx, g, vis);
     blitCoast(ctx, coastOf(g.map), this.cam, this.vw, this.vh);
   }
@@ -366,49 +369,69 @@ export class GameView {
         for (let x = vis.x0; x <= vis.x1; x++) this.drawTile(ctx, x, y);
       }
       ctx.restore();
+      this.washLand(ctx, g, vis);
       this.washSea(ctx, g, vis);
       blitCoast(ctx, coastOf(g.map), this.cam, this.vw, this.vh);
       return;
     }
+    this.washLand(ctx, g, vis);
     this.washSea(ctx, g, vis);
     blitCoast(ctx, playMarksOf(g.map), this.cam, this.vw, this.vh);
     drawTownMarks(ctx, g.towns);
   }
 
-  // Warm the photograph's water toward linen. A gale darkens the same
-  // tiles and pulls streaks across them, so the weather is on the board.
-  washSea(ctx, g, vis) {
-    const gale = g.weather && g.weather.id === "gale";
-    const time = this.time || 0;
+  // Linen and wool over the photograph, so the land keeps the tapestry
+  // once the coast is crossed. Sea and the off-map cloth are left alone.
+  washLand(ctx, g, vis) {
     for (let y = vis.y0; y <= vis.y1; y++) {
       for (let x = vis.x0; x <= vis.x1; x++) {
-        if (terrainAt(gmap(g), x, y) !== TERRAIN.SEA) continue;
+        const terr = terrainAt(gmap(g), x, y);
+        if (terr === TERRAIN.SEA || terr === TERRAIN.OUT) continue;
         const px = x * TILE;
         const py = y * TILE;
-        ctx.fillStyle = gale ? "rgba(36, 48, 62, 0.58)" : "rgba(196, 168, 118, 0.4)";
+        ctx.fillStyle = "rgba(196, 154, 96, 0.28)";
         ctx.fillRect(px, py, TILE, TILE);
-        ctx.strokeStyle = gale ? "rgba(18, 24, 32, 0.4)" : "rgba(110, 84, 48, 0.2)";
+        ctx.strokeStyle = "rgba(120, 78, 40, 0.16)";
         ctx.lineWidth = 1;
-        const step = Math.max(4, TILE / 6);
         ctx.beginPath();
-        for (let i = step * 0.4; i < TILE; i += step) {
+        const step = Math.max(5, TILE / 5);
+        for (let i = step * 0.5; i < TILE; i += step) {
           ctx.moveTo(px, py + i);
           ctx.lineTo(px + TILE, py + i);
         }
         ctx.stroke();
-        if (!gale) continue;
+      }
+    }
+  }
+
+  // Blue-green water with a stitched wave. A gale darkens only the Channel
+  // squares a fleet cannot cross, and leaves the North Sea and Irish Sea.
+  washSea(ctx, g, vis) {
+    const gale = g.weather && g.weather.id === "gale";
+    const time = this.time || 0;
+    const map = gmap(g);
+    for (let y = vis.y0; y <= vis.y1; y++) {
+      for (let x = vis.x0; x <= vis.x1; x++) {
+        if (terrainAt(map, x, y) !== TERRAIN.SEA) continue;
+        const px = x * TILE;
+        const py = y * TILE;
+        const storm = gale && channelCrossing(map, x, y);
+        ctx.fillStyle = storm ? "rgba(16, 36, 64, 0.62)" : "rgba(38, 116, 128, 0.42)";
+        ctx.fillRect(px, py, TILE, TILE);
         ctx.save();
         ctx.beginPath();
         ctx.rect(px, py, TILE, TILE);
         ctx.clip();
-        ctx.strokeStyle = "rgba(214, 224, 232, 0.42)";
-        ctx.lineWidth = Math.max(1, TILE * 0.05);
+        ctx.strokeStyle = storm ? "rgba(186, 206, 220, 0.45)" : "rgba(214, 236, 226, 0.55)";
+        ctx.lineWidth = Math.max(1, TILE * 0.045);
+        ctx.setLineDash([Math.max(3, TILE * 0.16), Math.max(2, TILE * 0.12)]);
         ctx.beginPath();
-        const shift = (time * 26 + (x * 5 + y * 3)) % (TILE * 1.2);
-        for (let s = -TILE; s < TILE * 2; s += TILE * 0.5) {
-          const o = s + shift;
-          ctx.moveTo(px + o, py);
-          ctx.lineTo(px + o - TILE * 0.7, py + TILE);
+        const bands = storm ? 3 : 2;
+        for (let b = 0; b < bands; b++) {
+          const base = py + TILE * ((b + 0.7) / (bands + 0.4));
+          const drift = storm ? (time * 18 + x * 5 + y * 3) % (TILE * 0.5) : 0;
+          ctx.moveTo(px - 2, base + drift);
+          ctx.quadraticCurveTo(px + TILE * 0.5, base - TILE * 0.16 + drift, px + TILE + 2, base + drift);
         }
         ctx.stroke();
         ctx.restore();
@@ -420,7 +443,7 @@ export class GameView {
     ctx.font = labelFont();
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    for (const lab of layoutTownLabels(ctx, this.game.towns)) {
+    for (const lab of layoutTownLabels(ctx, this.game.towns, counterBoxes(this.game))) {
       if (lab.tx < vis.x0 - 3 || lab.tx > vis.x1 + 3 || lab.ty < vis.y0 - 3 || lab.ty > vis.y1 + 3) continue;
       paintOneLabel(ctx, lab);
     }
@@ -487,8 +510,8 @@ export class GameView {
 
   drawCounter(ctx, u, p) {
     const tile = TILE;
-    const w = tile * 0.84;
-    const h = tile * 0.66;
+    const w = tile * 0.88;
+    const h = tile * 0.8;
     const px = p.x * tile + (tile - w) / 2;
     const py = p.y * tile + (tile - h) / 2;
     const pal = SIDE_COL[u.side];
@@ -522,14 +545,22 @@ export class GameView {
     roundRect(ctx, px + 1.5, py + 1.5, w - 3, h - 3, Math.max(1, r - 1));
     ctx.stroke();
     ctx.restore();
-    const emblem = Math.min(h * 0.7, w * 0.4);
-    drawEmblem(ctx, u.side, px + w * 0.05, py + (h - emblem) / 2, emblem, pal.ink);
-    drawTypeIcon(ctx, u.type, px + w * 0.46, py + h * 0.08, w * 0.48, h * 0.5, pal.ink);
-    ctx.fillStyle = pal.ink;
-    ctx.font = `600 ${Math.max(11, Math.round(h * 0.34))}px Palatino Linotype, Palatino, serif`;
+    const emblem = Math.min(h * 0.48, w * 0.38);
+    drawEmblem(ctx, u.side, px + w * 0.04, py + h * 0.06, emblem, pal.ink);
+    drawTypeIcon(ctx, u.type, px + w * 0.46, py + h * 0.08, w * 0.48, h * 0.4, pal.ink);
+    const fs = Math.max(16, Math.round(tile * 0.42));
+    const num = String(u.combat);
+    ctx.font = `700 ${fs}px Palatino Linotype, Palatino, serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(String(u.combat), px + w * 0.7, py + h * 0.78);
+    const tw = ctx.measureText(num).width;
+    const nx = px + w * 0.5;
+    const ny = py + h - fs * 0.52;
+    ctx.fillStyle = "rgba(12, 8, 6, 0.55)";
+    roundRect(ctx, nx - tw / 2 - 3, ny - fs * 0.46, tw + 6, fs * 0.92, 3);
+    ctx.fill();
+    ctx.fillStyle = "#fff6df";
+    ctx.fillText(num, nx, ny);
     ctx.strokeStyle = u.id === this.game.selectedId ? "#fff4c2" : pal.edge;
     ctx.lineWidth = u.id === this.game.selectedId ? Math.max(2, tile * 0.055) : Math.max(1, tile * 0.03);
     roundRect(ctx, px, py, w, h, r);
@@ -556,6 +587,30 @@ export class GameView {
       ctx.textBaseline = "top";
       ctx.fillText("+" + cargo.length, px + w - 3, py + 2);
     }
+  }
+
+  // York stays in the opening frame when it fits. A short pane still names
+  // the army above the edge, so the northern threat is not a surprise.
+  drawNorthThreat(ctx) {
+    const york = this.game.towns.find((t) => t.name === "York");
+    if (!york) return;
+    const top = this.cam.y / TILE;
+    if (york.y >= top - 0.15) return;
+    const text = "Hardrada at York";
+    ctx.save();
+    ctx.font = "600 15px Palatino Linotype, Palatino, serif";
+    const tw = ctx.measureText(text).width;
+    const x = Math.max(12, (this.viewW - tw - 28) / 2);
+    const y = 8;
+    ctx.fillStyle = "rgba(22, 16, 12, 0.9)";
+    ctx.fillRect(x, y, tw + 28, 28);
+    ctx.strokeStyle = PAL.gold;
+    ctx.strokeRect(x + 0.5, y + 0.5, tw + 27, 27);
+    ctx.fillStyle = PAL.cream;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("↑  " + text, x + 8, y + 14);
+    ctx.restore();
   }
 
   drawCursor(ctx) {
@@ -585,7 +640,7 @@ export class GameView {
       for (let y = 0; y < this.game.h; y++) {
         for (let x = 0; x < this.game.w; x++) {
           if (terrainAt(gmap(this.game), x, y) !== TERRAIN.OUT) continue;
-          ctx.fillStyle = "rgba(214, 196, 166, 0.82)";
+          ctx.fillStyle = "rgba(36, 28, 22, 0.92)";
           ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
         }
       }
@@ -767,7 +822,39 @@ function labelPx() {
   return Math.max(15, Math.round(TILE * 0.42));
 }
 
-export function layoutTownLabels(ctx, towns) {
+// York through the Norman ports. A short pane pins York to the top.
+function openingCenter(vh) {
+  const top = 14.4;
+  const bottom = 39.2;
+  const visible = Math.max(1, vh / TILE);
+  const y = visible >= bottom - top ? (top + bottom) / 2 : top + visible / 2;
+  return { x: CHANNEL_X, y };
+}
+
+function counterBoxes(game) {
+  const seen = new Set();
+  const boxes = [];
+  const pad = TILE * 0.12;
+  for (const u of living(game)) {
+    const p = displayPos(game, u);
+    const key = p.x + "," + p.y;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const w = TILE * 0.96;
+    const h = TILE * 0.92;
+    const px = p.x * TILE + (TILE - w) / 2;
+    const py = p.y * TILE + (TILE - h) / 2;
+    boxes.push({ l: px - pad, r: px + w + pad, t: py - pad, b: py + h + pad });
+  }
+  return boxes;
+}
+
+function hitsCounter(box, obstacles) {
+  const gap = Math.max(3, TILE * 0.06);
+  return obstacles.some((o) => boxesHit(o, box, gap));
+}
+
+export function layoutTownLabels(ctx, towns, obstacles = []) {
   const px = labelPx();
   const gap = Math.max(4, Math.round(TILE * 0.1));
   ctx.font = labelFont();
@@ -778,10 +865,16 @@ export function layoutTownLabels(ctx, towns) {
     const width = measured > 2 ? measured : t.name.length * px * 0.55;
     const cx = t.x * TILE + TILE / 2;
     const tileTop = t.y * TILE;
-    const preferredY = tileTop - 4;
+    const onStack = hitsCounter(
+      { l: t.x * TILE, r: (t.x + 1) * TILE, t: tileTop, b: tileTop + TILE },
+      obstacles,
+    );
+    const preferredY = tileTop - (onStack ? px * 1.15 : 4);
     const step = Math.max(px, width * 0.55);
     const sides = [0, -1, 1, -2, 2, -3, 3];
-    const dys = [-4, TILE + px * 0.3, -px, TILE + px * 1.3, px * 0.4, -px * 1.8, TILE + px * 2.2];
+    const dys = onStack
+      ? [-px * 1.2, -px * 1.9, TILE + px * 1.45, -px * 0.45, TILE + px * 2.2, px * 0.2]
+      : [-4, TILE + px * 0.3, -px, TILE + px * 1.3, px * 0.4, -px * 1.8, TILE + px * 2.2];
     let choice = null;
     let best = Infinity;
     for (const dy of dys) {
@@ -791,6 +884,7 @@ export function layoutTownLabels(ctx, towns) {
         const box = labelBox(x, y, width, px);
         if (placed.some((p) => boxesHit(p, box, gap))) continue;
         if (coversOtherTown(box, t, towns)) continue;
+        if (hitsCounter(box, obstacles)) continue;
         let score = Math.abs(side) * 1.15 + Math.abs(y - preferredY) * 0.09;
         if (dy > 0) score += 0.35;
         for (const p of placed) {
@@ -812,6 +906,7 @@ export function layoutTownLabels(ctx, towns) {
             const x = cx + side * step;
             const box = labelBox(x, y, width, px);
             if (placed.some((p) => boxesHit(p, box, gap))) continue;
+            if (hitsCounter(box, obstacles)) continue;
             choice = { name: t.name, x, y, tx: t.x, ty: t.y, leader: true, ...box };
             break;
           }
@@ -949,6 +1044,7 @@ function buildPlayMarks(map) {
   strokeLinks(ctx, map, roadLink, "rgba(232, 210, 156, 0.85)", 2);
   strokeLinks(ctx, map, riverLink, "rgba(27, 78, 122, 0.82)", 3);
   strokeCellShore(ctx, map);
+  strokeSoftNorman(ctx, map);
   return { map, overlay };
 }
 
@@ -996,6 +1092,7 @@ function strokeCellShore(ctx, map) {
   for (let y = 0; y < map.h; y++) {
     for (let x = 0; x < map.w; x++) {
       if (terrainAt(map, x, y) === TERRAIN.SEA) continue;
+      if (normanCoastCell(x, y)) continue;
       const px = x * TILE;
       const py = y * TILE;
       if (terrainAt(map, x, y - 1) === TERRAIN.SEA) {
@@ -1456,6 +1553,91 @@ function chronicleEvent(game, week, line) {
   return `${when}${prose}.`;
 }
 
+// Sea between the English south coast and Normandy. A gale closes this
+// water; the North Sea and the Irish Sea stay open on the board.
+function channelCrossing(map, x, y) {
+  if (y < 30 || x < 12) return false;
+  if (terrainAt(map, x, y) !== TERRAIN.SEA) return false;
+  let north = false;
+  let south = false;
+  for (let d = 1; d <= 6; d++) {
+    const tn = terrainAt(map, x, y - d);
+    const ts = terrainAt(map, x, y + d);
+    if (tn !== TERRAIN.SEA && tn !== TERRAIN.OUT) north = true;
+    if (ts !== TERRAIN.SEA && ts !== TERRAIN.OUT) south = true;
+  }
+  return north && south;
+}
+
+function normanCoastCell(x, y) {
+  return y >= 33 && y <= 40 && x >= 12 && x <= 26;
+}
+
+function normanCorner(p) {
+  return p.y >= 33 && p.y <= 41 && p.x >= 12 && p.x <= 27;
+}
+
+// The square shore of Normandy is a staircase. A short stitched curve
+// replaces that edge and leaves the rest of the coast on the cells.
+function appendOpenRun(path, pts) {
+  if (pts.length < 2) return;
+  const cuts = pts.map((cur, i) => {
+    const prev = pts[Math.max(0, i - 1)];
+    const next = pts[Math.min(pts.length - 1, i + 1)];
+    const v1x = cur.x - prev.x;
+    const v1y = cur.y - prev.y;
+    const v2x = next.x - cur.x;
+    const v2y = next.y - cur.y;
+    const l1 = Math.hypot(v1x, v1y) || 1;
+    const l2 = Math.hypot(v2x, v2y) || 1;
+    const cut = i === 0 || i === pts.length - 1 ? 0 : Math.min(COAST_RADIUS, l1 * 0.45, l2 * 0.45);
+    return {
+      bx: cur.x + (v2x / l2) * cut,
+      by: cur.y + (v2y / l2) * cut,
+      ax: cur.x - (v1x / l1) * cut,
+      ay: cur.y - (v1y / l1) * cut,
+      cur,
+    };
+  });
+  path.moveTo(cuts[0].bx * TILE, cuts[0].by * TILE);
+  for (let i = 1; i < cuts.length; i++) {
+    const s = cuts[i];
+    const mx = ((s.ax + s.bx) / 2) * (1 - COAST_ROUND) + s.cur.x * COAST_ROUND;
+    const my = ((s.ay + s.by) / 2) * (1 - COAST_ROUND) + s.cur.y * COAST_ROUND;
+    path.quadraticCurveTo(mx * TILE, my * TILE, s.bx * TILE, s.by * TILE);
+  }
+}
+
+function strokeSoftNorman(ctx, map) {
+  const path = new Path2D();
+  for (const loop of traceCoastLoops(map)) {
+    let run = [];
+    const flush = () => {
+      appendOpenRun(path, run);
+      run = [];
+    };
+    for (const p of loop) {
+      if (normanCorner(p)) run.push(p);
+      else flush();
+    }
+    flush();
+  }
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(248, 240, 220, 0.85)";
+  ctx.lineWidth = Math.max(3, TILE * 0.08);
+  ctx.stroke(path);
+  ctx.strokeStyle = "rgba(20, 14, 8, 0.88)";
+  ctx.lineWidth = Math.max(1.25, TILE * 0.035);
+  ctx.stroke(path);
+  ctx.strokeStyle = "rgba(122, 36, 28, 0.92)";
+  ctx.lineWidth = Math.max(1.5, TILE * 0.05);
+  ctx.setLineDash([Math.max(3, TILE * 0.16), Math.max(2, TILE * 0.12)]);
+  ctx.stroke(path);
+  ctx.restore();
+}
+
 function placeOf(game, name) {
   const u = game.units.find((unit) => unit.name === name);
   if (!u || !game.towns.length) return "";
@@ -1472,9 +1654,9 @@ function placeOf(game, name) {
 }
 
 function paintVellum(ctx, px, py, size) {
-  ctx.fillStyle = "rgba(232, 216, 186, 0.86)";
+  ctx.fillStyle = "rgba(36, 28, 22, 0.92)";
   ctx.fillRect(px, py, size, size);
-  ctx.strokeStyle = "rgba(128, 96, 58, 0.16)";
+  ctx.strokeStyle = "rgba(12, 8, 6, 0.4)";
   ctx.lineWidth = 1;
   const step = Math.max(5, size / 5.5);
   ctx.beginPath();
