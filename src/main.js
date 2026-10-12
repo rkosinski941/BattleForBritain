@@ -1,6 +1,6 @@
 import { loadMap } from "./world.js";
 import { createGame } from "./engine.js";
-import { GameView } from "./view.js";
+import { GameView, loadBoardImage } from "./view.js";
 
 const title = document.getElementById("title");
 const howto = document.getElementById("howto");
@@ -17,6 +17,7 @@ let mapData = null;
 loadMap()
   .then((data) => {
     mapData = data;
+    loadBoardImage(data);
     document.getElementById("play").disabled = false;
   })
   .catch((err) => {
