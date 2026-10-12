@@ -1437,9 +1437,9 @@ function formatLogLines(game) {
 }
 
 function chronicleDate(week, rest) {
-  if (WEATHER_CHRONICLE[rest]) return `In the week of ${week}, ${WEATHER_CHRONICLE[rest]}.`;
-  const prose = String(rest || "").replace(/\.$/, "");
-  return prose ? `In the week of ${week}, ${prose}.` : `In the week of ${week}.`;
+  const clean = String(rest || "").replace(/\.$/, "").trim();
+  if (WEATHER_CHRONICLE[clean]) return `In the week of ${week}, ${WEATHER_CHRONICLE[clean]}.`;
+  return clean ? `In the week of ${week}, ${clean}.` : `In the week of ${week}.`;
 }
 
 function chronicleEvent(game, week, line) {
