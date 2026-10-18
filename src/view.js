@@ -514,7 +514,7 @@ export class GameView {
     this.hud.innerHTML = `
       <div class="brand">
         <div class="kicker">Anno Domini MLXVI</div>
-        <h2>Battle for Britain</h2>
+        <h2>Hold the Isle</h2>
       </div>
       <div class="statline">
         <div><label>Date</label>${d.label}</div>
